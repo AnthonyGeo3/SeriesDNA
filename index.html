@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Series DNA</title>
+  <meta name="description" content="Every episode of two TV shows as colour barcodes, head to head.">
+  <meta name="theme-color" content="#0b0d12">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Series DNA">
+  <meta property="og:description" content="Every episode of two TV shows as colour barcodes. See where each hit its golden era, sagged, and stuck (or crashed) the landing.">
+  <meta property="og:image" content="https://anthonygeo3.github.io/SeriesDNA/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="top">
+      <h1 class="logo">Series <span>DNA</span></h1>
+      <p class="matchup">
+        <span class="slot" data-slot="a"><b>A</b> <span class="slot-name"></span></span>
+        <span class="vs">vs</span>
+        <span class="slot" data-slot="b"><b>B</b> <span class="slot-name"></span></span>
+      </p>
+      <div class="search" id="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="search" id="search-input" placeholder="Search any show…" autocomplete="off" spellcheck="false"
+               aria-expanded="false" aria-controls="search-results" aria-label="Search for a TV show">
+        <div class="search-results" id="search-results" hidden></div>
+      </div>
+      <button type="button" class="btn-pill" id="stats-open" aria-expanded="false" aria-controls="stats">Stats</button>
+      <button type="button" class="btn-pill btn-icon-pill" id="palette" aria-pressed="false" title="Colour-blind safe palette" aria-label="Colour-blind safe palette">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="btn-pill btn-icon-pill" id="share" title="Share this moment" aria-label="Share this moment">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wide-label">Share</span>
+      </button>
+    </header>
+
+    <main class="stage">
+      <nav class="rivalries" id="rivalries" aria-label="Rivalries"></nav>
+      <section class="strips" id="strips" aria-label="Episode rating barcodes">
+        <div class="label" data-slot="a"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
+        <canvas class="strip" data-slot="a" role="img"></canvas>
+        <div class="skeleton" data-slot="a" hidden></div>
+        <canvas class="ticks" data-slot="a" aria-hidden="true"></canvas>
+        <div class="label" data-slot="b"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
+        <canvas class="strip" data-slot="b" role="img"></canvas>
+        <div class="skeleton" data-slot="b" hidden></div>
+        <canvas class="ticks" data-slot="b" aria-hidden="true"></canvas>
+        <div class="track" id="track"><div class="laser" id="laser"></div></div>
+      </section>
+
+      <section class="controls">
+        <div class="mode" role="group" aria-label="Strip scale">
+          <button type="button" data-mode="pct" aria-pressed="true" title="Every show stretched to the same width"><span class="wide">% </span>Lifespan</button>
+          <button type="button" data-mode="hours" aria-pressed="false" title="Width by total running time">Hours</button>
+        </div>
+        <input type="range" class="scrub" id="scrub" min="0" max="1000" value="0" aria-label="Scrub through both shows">
+      </section>
+
+      <section class="cards">
+        <article class="card" data-slot="a"></article>
+        <article class="card" data-slot="b"></article>
+      </section>
+    </main>
+
+    <p class="status" id="status" role="status">Loading…</p>
+  </div>
+
+  <div class="sheet-backdrop" id="stats-backdrop" hidden></div>
+  <aside class="sheet" id="stats" aria-label="Stats" hidden>
+    <div class="sheet-head">
+      <h2>Stats</h2>
+      <button type="button" class="btn-icon" id="stats-close" aria-label="Close stats">✕</button>
+    </div>
+    <div class="sheet-body" id="stats-body"></div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <div class="rotate" id="rotate" hidden>
+    <svg class="rotate-phone" viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="20" y="6" width="24" height="52" rx="5" fill="none" stroke="currentColor" stroke-width="3"/>
+      <circle cx="32" cy="51" r="2" fill="currentColor"/>
+    </svg>
+    <p>Turn your phone sideways for the best view</p>
+    <div class="rotate-actions">
+      <button type="button" class="btn" id="rotate-lock" hidden>Go fullscreen</button>
+      <button type="button" class="btn btn-quiet" id="rotate-dismiss">Continue anyway</button>
+    </div>
+  </div>
+
+  <script>
+    // ES modules and fetch() don't load over file://, so say how to run it.
+    if (location.protocol === "file:") {
+      document.getElementById("status").textContent =
+        "Series DNA needs a local web server: run `npx serve` in this folder and open the URL it prints.";
+    }
+  </script>
+</body>
+</html>
