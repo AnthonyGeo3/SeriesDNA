@@ -14,23 +14,23 @@ export const AUDIT = { minCoverage: 0.85, minRange: 1.0 };
 export const PRESETS = [
   { name: "The Boys", year: 2019, id: 15299 },
   { name: "Grey's Anatomy", year: 2005, id: 67 },
-  { name: "Silo", year: 2023 },
+  { name: "Silo", year: 2023, id: 38052 },
   { name: "Peaky Blinders", year: 2013, id: 269 },
   { name: "Breaking Bad", year: 2008, id: 169 },
-  { name: "Succession", year: 2018 },
+  { name: "Succession", year: 2018, id: 23470 },
   { name: "Game of Thrones", year: 2011, id: 82 },
   { name: "The Office", year: 2005, id: 526 },
   { name: "Lost", year: 2004, id: 123 },
   { name: "Stranger Things", year: 2016, id: 2993 },
-  { name: "Better Call Saul", year: 2015 },
-  { name: "The Wire", year: 2002 },
+  { name: "Better Call Saul", year: 2015, id: 618 },
+  { name: "The Wire", year: 2002, id: 179 },
   { name: "Friends", year: 1994, id: 431 },
-  { name: "Dexter", year: 2006 },
-  { name: "The Simpsons", year: 1989 },
+  { name: "Dexter", year: 2006, id: 161 },
+  { name: "The Simpsons", year: 1989, id: 83 },
 ];
 
 // Audited but never baked: checks that the soap guard trips.
-export const GUARD_TESTS = [{ name: "Coronation Street", year: 1960 }];
+export const GUARD_TESTS = [{ name: "Coronation Street", year: 1960, id: 4139 }];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -31,7 +31,7 @@ for (const r of resolved) {
   const f = flags(r);
   console.log(`  ${`${r.name} (${r.year})`.padEnd(32)} ${String(r.n).padStart(4)} eps  ${`${Math.round(r.coverage * 100)}%`.padStart(4)} rated  ${f.join(", ")}`);
 }
-console.log("\nResolved ids (paste into PRESETS in scripts/lib.mjs to lock them):");
+console.log("\nResolved ids:");
 for (const r of resolved) console.log(`  { name: ${JSON.stringify(r.name)}, year: ${r.year}, id: ${r.id} },`);
 
 const kb = (Buffer.byteLength(json) / 1024).toFixed(1);
