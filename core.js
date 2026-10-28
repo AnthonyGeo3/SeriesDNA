@@ -14,7 +14,7 @@ export const CONFIG = {
     whiplash: [0.35, 0.6], // std dev: below = Consistent, between = Bumpy, above = Chaotic
     dropWindowMin: 5,
     dropWindowFrac: 0.05, // window = max(min, round(n * frac))
-    dropEdgeFrac: 0.05, // ignore dips in the first and last 5%
+    dropSkipFrac: 0.05, // ignore dips in the first 5% (weak pilots); finales count
   },
 };
 
@@ -246,9 +246,9 @@ export function stats(show) {
     sd = Math.sqrt(acc / show.rated);
   }
 
-  const edge = Math.floor(show.n * cfg.dropEdgeFrac);
+  const skip = Math.floor(show.n * cfg.dropSkipFrac);
   const dropSize = Math.max(cfg.dropWindowMin, Math.round(show.n * cfg.dropWindowFrac));
-  const drop = extremeWindow(show, dropSize, edge, show.n - 1 - edge, -1);
+  const drop = extremeWindow(show, dropSize, skip, show.n - 1, -1);
   if (drop) drop.at = ((drop.start + drop.end + 1) / 2 / show.n) * 100; // % of lifespan
 
   return {

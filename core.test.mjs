@@ -93,10 +93,10 @@ test("fromTvmaze keeps numbered episodes and falls back on runtime", () => {
 });
 
 test("stats: golden era, whiplash and drop-off", () => {
-  // 40 episodes at 8, a peak at 10-14, a dip at 25-29, and a low finale
-  // that the edge rule must ignore.
+  // 40 episodes at 8, a weak pilot (ignored: first 5%), a peak at 10-14
+  // and a dip at 25-29.
   const ratings = Array.from({ length: 40 }, (_, i) =>
-    i >= 10 && i <= 14 ? 9.5 : i >= 25 && i <= 29 ? 6.5 : i === 39 ? 3 : 8);
+    i === 0 ? 2 : i >= 10 && i <= 14 ? 9.5 : i >= 25 && i <= 29 ? 6.5 : 8);
   ratings[12] = null; // a null inside the golden window is skipped
   const show = mk(ratings.map((rating, i) => ({ s: 1 + Math.floor(i / 10), e: (i % 10) + 1, rating, runtime: 30 })));
   const st = stats(show);
@@ -108,6 +108,12 @@ test("stats: golden era, whiplash and drop-off", () => {
   assert.equal(st.drop.at, 68.75);
   assert.equal(st.whiplash.label, "Chaotic");
   assert.deepEqual([0.2, 0.35, 0.6, 0.61].map(whiplashLabel), ["Consistent", "Bumpy", "Bumpy", "Chaotic"]);
+});
+
+test("drop-off counts a crashed finale", () => {
+  const ratings = Array.from({ length: 40 }, (_, i) => (i >= 35 ? 5 : 8));
+  const st = stats(mk(ratings.map((rating, i) => ({ s: 1, e: i + 1, rating, runtime: 30 }))));
+  assert.deepEqual([st.drop.start, st.drop.end], [35, 39]);
 });
 
 test("stats cope with tiny and unrated shows", () => {
