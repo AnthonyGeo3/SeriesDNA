@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   prepareShow, bandIndex, ratingToBand, PALETTES, layout, episodeAt, maxMinutes,
   segments, episodeCode, formatDelta, hoursIn, hasEnoughData, stats, whiplashLabel,
-  positionOf, fromTvmaze, encodeState, decodeState, snapP, CONFIG,
+  positionOf, fromTvmaze, encodeState, decodeState, snapP, CONFIG, gameItems, gameGap, pickNext, judge,
 } from "./core.js";
 
 const mk = (eps) => prepareShow({ id: 1, name: "T", year: 2000, episodes: eps });
@@ -135,3 +135,41 @@ test("URL state round-trips and tolerates junk", () => {
   assert.equal(snapP(0.123456), 0.1235);
 });
 
+
+// Small seeded RNG so game tests are repeatable.
+const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+
+test("game items: whole show plus seasons with enough ratings", () => {
+  const show = mk([
+    ...[8, 9, 8.5].map((rating, i) => ({ s: 1, e: i + 1, rating, runtime: 30 })),
+    ...[7, null, 7.2, 7.4].map((rating, i) => ({ s: 2, e: i + 1, rating, runtime: 30 })),
+    ...[9, 9].map((rating, i) => ({ s: 3, e: i + 1, rating, runtime: 30 })), // too few rated
+  ]);
+  const items = gameItems(show);
+  assert.deepEqual(items.map((it) => [it.key, it.kind, it.rating, it.start, it.end]), [
+    ["1", "show", 8.1, 0, 8], // 65.1 / 8 rated
+    ["1:s1", "season", 8.5, 0, 2],
+    ["1:s2", "season", 7.2, 3, 6],
+  ]);
+  const single = gameItems(mk([{ s: 1, e: 1, rating: 8, runtime: 30 }]));
+  assert.equal(single.length, 1);
+});
+
+test("game: gap shrinks with score; picks respect it; ties count", () => {
+  assert.equal(gameGap(0), 0.5);
+  assert.equal(gameGap(100), 0.1);
+  const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
+  const pool = Object.values(presets).map((raw) => gameItems(prepareShow(raw)));
+  const rng = seeded(42);
+  let current = pickNext(pool, null, 0, rng);
+  for (let score = 0; score < 40; score++) {
+    const next = pickNext(pool, current, score, rng);
+    assert.notEqual(next.key, current.key);
+    assert.ok(Math.abs(next.rating - current.rating) >= gameGap(score) - 1e-9, `score ${score}`);
+    current = next;
+  }
+  const a = { rating: 8.2 }, b = { rating: 8.5 };
+  assert.equal(judge(a, b, "higher"), true);
+  assert.equal(judge(a, b, "lower"), false);
+  assert.equal(judge(a, { rating: 8.2 }, "lower"), true);
+});

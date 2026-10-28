@@ -297,6 +297,64 @@ button.stat:hover, button.stat:focus-visible { border-color: var(--fg); outline:
   body.stats-open .app { margin-right: 380px; }
 }
 
+/* Higher or Lower */
+.game {
+  position: fixed; inset: 0; z-index: 90;
+  /* Spare height splits above the cards and below the buttons, so cards,
+     question and buttons stay together in the middle. */
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--gap);
+  padding:
+    max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background:
+    radial-gradient(60% 50% at 15% 0%, rgba(0, 229, 160, 0.08), transparent 70%),
+    radial-gradient(50% 45% at 90% 100%, rgba(255, 61, 110, 0.08), transparent 70%),
+    var(--bg);
+}
+.game[hidden] { display: none; }
+.game-head { display: flex; align-items: center; gap: 16px; min-height: 44px; }
+.game-head h2 { margin: 0; font-size: clamp(0.85rem, 1.6vw, 1.15rem); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+.game-score { margin: 0 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.game-score b { color: var(--fg); font-size: 1.15rem; margin-right: 12px; }
+.game-score span b { margin-right: 0; }
+.game-board {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--gap);
+  width: min(100%, 900px); margin: 0 auto; min-height: 0; align-self: end;
+}
+.game-vs { color: var(--muted); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
+.game-card {
+  position: relative; overflow: hidden; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: clamp(10px, 2.2dvh, 18px) 16px clamp(10px, 2.2dvh, 18px) 22px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-solid);
+  transition: transform 0.2s ease-out;
+}
+.game-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--accent, var(--line)); }
+.game-card.pop { transform: scale(1.03); }
+.game-kicker { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.game-name { font-weight: 800; font-size: clamp(1rem, 2.4vw, 1.5rem); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-meta { color: var(--muted); font-size: 0.78rem; }
+.game-rating { font-size: clamp(1.9rem, 9dvh, 3.6rem); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hidden-rating .game-rating { color: var(--muted); }
+.game-strip { height: clamp(14px, 4dvh, 28px); border-radius: 4px; margin-top: 4px; }
+.game-strip-blank { background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 9px); }
+.game-msg { margin: 0; min-height: 1.3em; text-align: center; font-size: clamp(0.85rem, 1.8vw, 1.05rem); }
+.game-actions { display: flex; justify-content: center; align-self: start; gap: 12px; }
+.game-btn { flex: 0 1 200px; min-height: 48px; font-size: 1rem; }
+.game-btn:disabled { opacity: 0.5; cursor: default; }
+/* Same look for both guesses so neither is nudged. */
+#game-higher, #game-lower { background: transparent; color: var(--fg); border: 1px solid var(--fg); }
+/* Mouse only: on touch screens :hover sticks after a tap and looks like a pick. */
+@media (hover: hover) {
+  #game-higher:hover:not(:disabled), #game-lower:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
+}
+body.game-open { overflow: hidden; }
+@media (orientation: portrait) and (max-width: 700px) {
+  .game-board { grid-template-columns: minmax(0, 1fr); align-content: center; }
+  .game-vs { text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) { .game-card.pop { transform: none; } }
+
 /* Toast */
 .toast {
   position: fixed; z-index: 120; left: 50%; bottom: max(16px, env(safe-area-inset-bottom));

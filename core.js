@@ -12,6 +12,13 @@ export const CONFIG = {
   // Scrubber resolution. Positions snap to it so a shared link (?at=65.43)
   // lands on exactly the same episodes; fine enough for 1,500-episode shows.
   steps: 10000,
+  game: {
+    minSeasonRated: 3, // seasons with fewer rated episodes aren't asked about
+    showChance: 0.35, // chance a card is a whole show rather than one season
+    startGap: 0.5, // early pairs differ by at least this much...
+    gapStep: 0.04, // ...shrinking by this per point scored...
+    minGap: 0.1, // ...down to this
+  },
   stats: {
     goldenWindow: 5, // rated episodes
     whiplash: [0.35, 0.6], // std dev: below = Consistent, between = Bumpy, above = Chaotic
@@ -282,4 +289,67 @@ export function stats(show) {
     whiplash: sd == null ? null : { sd, label: whiplashLabel(sd) },
     drop,
   };
+}
+
+// ---- Higher or Lower -------------------------------------------------------------
+
+const round1 = (x) => Math.round(x * 10) / 10;
+
+// Whole-show and per-season averages, rounded to what the player sees.
+export function gameItems(show) {
+  if (!show.rated) return [];
+  const items = [{
+    key: String(show.id), showId: show.id, name: show.name, year: show.year, kind: "show",
+    seasons: show.seasons.length, start: 0, end: show.n - 1, count: show.rated, rating: round1(show.avg),
+  }];
+  if (show.seasons.length < 2) return items; // one season = the same as the whole show
+  show.seasons.forEach(({ s, start }, i) => {
+    const end = i + 1 < show.seasons.length ? show.seasons[i + 1].start - 1 : show.n - 1;
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j <= end; j++) {
+      const r = show.episodes[j].rating;
+      if (r != null) {
+        sum += r;
+        count++;
+      }
+    }
+    if (count >= CONFIG.game.minSeasonRated) {
+      items.push({ key: `${show.id}:s${s}`, showId: show.id, name: show.name, year: show.year, kind: "season",
+        season: s, start, end, count, rating: round1(sum / count) });
+    }
+  });
+  return items;
+}
+
+export function gameGap(score) {
+  const g = CONFIG.game;
+  return Math.max(g.minGap, g.startGap - g.gapStep * score);
+}
+
+// Next card to compare with `current`: a random show, then its whole-show
+// average or one of its seasons, at least gameGap(score) away from current.
+// `pool` is one gameItems() array per show.
+export function pickNext(pool, current, score, rng = Math.random) {
+  const shows = pool.filter((items) => items.length);
+  const gap = gameGap(score);
+  let fallback = null;
+  for (let tries = 0; tries < 300; tries++) {
+    const items = shows[Math.floor(rng() * shows.length)];
+    const pick = items.length === 1 || rng() < CONFIG.game.showChance
+      ? items[0]
+      : items[1 + Math.floor(rng() * (items.length - 1))];
+    if (!current) return pick;
+    if (pick.key === current.key) continue;
+    const d = Math.abs(pick.rating - current.rating);
+    if (d >= gap - 1e-9) return pick;
+    if (d > 0 && (!fallback || d > Math.abs(fallback.rating - current.rating))) fallback = pick;
+  }
+  return fallback ?? shows.flat().find((it) => it.key !== current.key) ?? current;
+}
+
+// A tie counts as correct either way.
+export function judge(current, next, guess) {
+  if (next.rating === current.rating) return true;
+  return guess === "higher" ? next.rating > current.rating : next.rating < current.rating;
 }
