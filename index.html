@@ -6,6 +6,16 @@
   <title>Series DNA</title>
   <meta name="description" content="Every episode of two TV shows as colour barcodes, head to head.">
   <meta name="theme-color" content="#0b0d12">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Series DNA">
+  <meta property="og:description" content="Every episode of two TV shows as colour barcodes. See where each hit its golden era, sagged, and stuck (or crashed) the landing.">
+  <meta property="og:image" content="https://anthonygeo3.github.io/SeriesDNA/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
 </head>
@@ -25,9 +35,17 @@
         <div class="search-results" id="search-results" hidden></div>
       </div>
       <button type="button" class="btn-pill" id="stats-open" aria-expanded="false" aria-controls="stats">Stats</button>
+      <button type="button" class="btn-pill btn-icon-pill" id="palette" aria-pressed="false" title="Colour-blind safe palette" aria-label="Colour-blind safe palette">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="btn-pill btn-icon-pill" id="share" title="Share this moment" aria-label="Share this moment">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="wide-label">Share</span>
+      </button>
     </header>
 
     <main class="stage">
+      <nav class="rivalries" id="rivalries" aria-label="Rivalries"></nav>
       <section class="strips" id="strips" aria-label="Episode rating barcodes">
         <div class="label" data-slot="a"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
         <canvas class="strip" data-slot="a" role="img"></canvas>

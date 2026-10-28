@@ -9,6 +9,14 @@ export const CONFIG = {
   defaultRuntime: 45,
   guard: { maxEpisodes: 1500, minCoverage: 0.5 },
   defaultShows: { a: 15299, b: 67 }, // The Boys vs Grey's Anatomy
+  rivalries: [
+    { name: "Sprint vs Marathon", a: 15299, b: 67 }, // The Boys vs Grey's Anatomy
+    { name: "Stuck the Landing vs Crashed", a: 169, b: 82 }, // Breaking Bad vs Game of Thrones
+    { name: "Sci-Fi Showdown", a: 38052, b: 123 }, // Silo vs Lost
+  ],
+  // Scrubber resolution. Positions snap to it so a shared link (?at=65.43)
+  // lands on exactly the same episodes; fine enough for 1,500-episode shows.
+  steps: 10000,
   stats: {
     goldenWindow: 5, // rated episodes
     whiplash: [0.35, 0.6], // std dev: below = Consistent, between = Bumpy, above = Chaotic
@@ -138,6 +146,29 @@ export function episodeAt(show, p, mode, maxMins) {
     else lo = mid + 1;
   }
   return { idx: lo, ended: false };
+}
+
+export function snapP(p) {
+  return Math.round(Math.min(1, Math.max(0, p)) * CONFIG.steps) / CONFIG.steps;
+}
+
+// URL state: ?a=<tvmazeId>&b=<tvmazeId>&at=<percent>&mode=pct|hours
+export function encodeState({ a, b, p, mode }) {
+  const at = Math.round(snapP(p) * CONFIG.steps) / (CONFIG.steps / 100);
+  return new URLSearchParams({ a, b, at: String(at), mode }).toString();
+}
+
+// Lenient: anything missing or malformed falls back to the defaults.
+export function decodeState(search) {
+  const q = new URLSearchParams(search);
+  const id = (k) => (/^\d+$/.test(q.get(k) ?? "") ? Number(q.get(k)) : CONFIG.defaultShows[k]);
+  const at = Number(q.get("at"));
+  return {
+    a: id("a"),
+    b: id("b"),
+    p: q.has("at") && Number.isFinite(at) ? snapP(at / 100) : 0,
+    mode: q.get("mode") === "hours" ? "hours" : "pct",
+  };
 }
 
 // Inverse of episodeAt: scrubber position at the middle of episode idx.

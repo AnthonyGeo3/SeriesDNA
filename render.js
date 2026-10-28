@@ -22,11 +22,13 @@ export function drawStrip(canvas, show, { palette, mode = "pct", widthFrac = 1, 
   // A hairline gap between episodes reads as a barcode when they're wide.
   const gap = drawW / show.n >= 8 * dpr ? Math.max(1, Math.round(dpr / 2)) : 0;
   let fill = null;
-  for (const seg of segments(show, mode, drawW)) {
+  const segs = segments(show, mode, drawW);
+  segs.forEach((seg, i) => {
     const colour = ratingToBand(seg.rating, palette);
     if (colour !== fill) ctx.fillStyle = fill = colour;
-    ctx.fillRect(seg.x, 0, Math.max(1, seg.w - gap), h);
-  }
+    const g = i === segs.length - 1 ? 0 : gap; // the strip ends flush
+    ctx.fillRect(seg.x, 0, Math.max(1, seg.w - g), h);
+  });
   drawMarkers(ctx, show, { mode, drawW, h, dpr, markers, theme });
 }
 

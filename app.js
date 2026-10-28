@@ -2,6 +2,7 @@
 import {
   CONFIG, PALETTES, fromTvmaze, prepareShow, hasEnoughData, maxMinutes, layout,
   episodeAt, positionOf, seasonAt, bandIndex, episodeCode, formatDelta, hoursIn, stats,
+  snapP, encodeState, decodeState,
 } from "./core.js";
 import { drawStrip, drawTicks } from "./render.js";
 
@@ -11,6 +12,8 @@ const TWEEN_MS = 500;
 const SEARCH_DEBOUNCE_MS = 300;
 const FLIP_MIN_GAP_MS = 150;
 const CACHE_PREFIX = "sdna:v1:show:";
+const PALETTE_KEY = "sdna:v1:palette";
+const URL_THROTTLE_MS = 300;
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -23,6 +26,7 @@ const state = {
   p: 0, // scrubber position in [0,1] of the bar width
   mode: "pct",
   widthFrac: { a: 1, b: 1 }, // drawn strip widths (tweened)
+  paletteKey: "neon",
   palette: PALETTES.neon,
   shown: { a: null, b: null }, // what each card currently shows
   season: { a: null, b: null }, // for haptics on season boundaries
@@ -43,6 +47,9 @@ const els = {
   statsOpen: $("#stats-open"),
   statsBackdrop: $("#stats-backdrop"),
   toast: $("#toast"),
+  rivalries: $("#rivalries"),
+  palette: $("#palette"),
+  share: $("#share"),
 };
 let trackWidth = 0;
 let theme = null;
@@ -228,7 +235,7 @@ let frameQueued = false;
 let userDriven = false;
 
 function setP(p, fromUser) {
-  state.p = Math.min(1, Math.max(0, p));
+  state.p = snapP(p);
   userDriven ||= fromUser;
   queueFrame();
 }
@@ -269,6 +276,7 @@ function frame() {
     spoken.push(`${show.name} ${ended ? "ended" : episodeCode(ep)}, ${ep.rating != null ? ep.rating.toFixed(1) : "no rating"}`);
   }
   els.scrub.setAttribute("aria-valuetext", spoken.join("; "));
+  scheduleUrl();
 
   // Tactile tick on Android; a no-op elsewhere.
   if (crossedSeason && userDriven && "vibrate" in navigator) navigator.vibrate(8);
@@ -298,9 +306,13 @@ function bindScrubbing() {
 function setMode(mode) {
   if (mode === state.mode) return;
   state.mode = mode;
-  for (const b of document.querySelectorAll(".mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  syncModeButtons();
   animateWidths();
   queueFrame();
+}
+
+function syncModeButtons() {
+  for (const b of document.querySelectorAll(".mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
 }
 
 function bindMode() {
@@ -359,15 +371,54 @@ async function loadIntoSlot(slot, { id, name }) {
     return;
   }
   if (!state.presets[id]) cacheSet(raw);
+  setSlot(slot, show);
+  refreshAfterShowChange();
+}
+
+function setSlot(slot, show) {
   state.shows[slot] = show;
   state.stats[slot] = stats(show);
   state.shown[slot] = null;
   state.season[slot] = null;
+}
+
+function refreshAfterShowChange() {
   renderLabels();
   renderStats();
+  renderRivalries();
   animateWidths(); // the longest runtime may have changed (hours mode)
   drawStrips();
   queueFrame();
+}
+
+// ---- Rivalries -------------------------------------------------------------------
+
+const isCurrent = (r) => state.shows.a?.id === r.a && state.shows.b?.id === r.b;
+
+function loadRivalry(r) {
+  setSlot("a", prepareShow(state.presets[r.a]));
+  setSlot("b", prepareShow(state.presets[r.b]));
+  state.p = 0;
+  refreshAfterShowChange();
+}
+
+function renderRivalries() {
+  els.rivalries.replaceChildren(...CONFIG.rivalries.map((r) =>
+    h("button", { type: "button", "aria-pressed": String(isCurrent(r)), onclick: () => loadRivalry(r) }, r.name)));
+}
+
+function rivalryRow(r) {
+  return h("div", { class: "result" },
+    h("span", { class: "result-name" }, r.name,
+      h("span", { class: "result-year" }, `${state.presets[r.a].name} vs ${state.presets[r.b].name}`)),
+    h("button", {
+      type: "button",
+      onclick: () => {
+        closeSearch();
+        els.searchInput.blur();
+        loadRivalry(r);
+      },
+    }, "Load"));
 }
 
 // ---- Search ----------------------------------------------------------------------
@@ -407,6 +458,10 @@ function renderResults(q, live) {
   const box = els.searchResults;
   box.replaceChildren();
   const presets = presetMatches(q);
+  if (!q) {
+    box.append(h("div", { class: "results-head" }, "Rivalries"));
+    for (const r of CONFIG.rivalries) box.append(rivalryRow(r));
+  }
   if (presets.length) {
     box.append(h("div", { class: "results-head" }, q ? "Presets" : "Presets (work offline)"));
     for (const p of presets) box.append(resultRow(p));
@@ -541,6 +596,88 @@ function bindStats() {
   els.statsBackdrop.addEventListener("click", () => toggleStats(false));
 }
 
+// ---- URL state and sharing -----------------------------------------------------
+
+const currentState = () => ({ a: state.shows.a.id, b: state.shows.b.id, p: state.p, mode: state.mode });
+const shareUrl = () => `${location.origin}${location.pathname}?${encodeState(currentState())}`;
+
+// Trailing throttle: the URL catches up with the latest state.
+let urlTimer = 0;
+function scheduleUrl() {
+  if (urlTimer) return;
+  urlTimer = setTimeout(() => {
+    urlTimer = 0;
+    history.replaceState(null, "", `?${encodeState(currentState())}`);
+  }, URL_THROTTLE_MS);
+}
+
+async function share() {
+  const url = shareUrl();
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Series DNA", text: `${state.shows.a.name} vs ${state.shows.b.name}`, url });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return; // the user closed the share sheet
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copied");
+  } catch {
+    toast(url); // no clipboard access: at least show the link
+  }
+}
+
+function setPalette(key, announce) {
+  state.paletteKey = key;
+  state.palette = PALETTES[key];
+  applyPalette(state.palette);
+  els.palette.setAttribute("aria-pressed", String(key === "okabe"));
+  try {
+    localStorage.setItem(PALETTE_KEY, key);
+  } catch {
+    // Not persisted in private mode; the switch still works.
+  }
+  if (announce) toast(`${state.palette.name} palette`);
+}
+
+function savedPalette() {
+  try {
+    const key = localStorage.getItem(PALETTE_KEY);
+    return PALETTES[key] ? key : "neon";
+  } catch {
+    return "neon";
+  }
+}
+
+function bindHeaderButtons() {
+  els.share.addEventListener("click", share);
+  els.palette.addEventListener("click", () => {
+    setPalette(state.paletteKey === "okabe" ? "neon" : "okabe", true);
+    drawStrips();
+  });
+}
+
+// A shared link may name non-preset shows: preset, then cache, then TVmaze.
+// Anything that can't be loaded falls back to the default for that slot.
+async function initialShow(slot, id) {
+  let raw = state.presets[id] ?? cacheGet(id);
+  if (!raw) {
+    try {
+      raw = await fetchShow(id);
+    } catch {
+      raw = null;
+    }
+  }
+  const show = raw && prepareShow(raw);
+  if (show && hasEnoughData(show)) {
+    if (!state.presets[id]) cacheSet(raw);
+    return { show, ok: true };
+  }
+  return { show: prepareShow(state.presets[CONFIG.defaultShows[slot]]), ok: false };
+}
+
 // ---- Resize ------------------------------------------------------------------
 
 function bindResize() {
@@ -587,7 +724,7 @@ function bindRotatePrompt() {
 // ---- Boot ----------------------------------------------------------------------
 
 async function init() {
-  applyPalette(state.palette);
+  setPalette(savedPalette(), false);
   theme = readTheme();
   bindRotatePrompt();
   try {
@@ -599,20 +736,24 @@ async function init() {
     return;
   }
   buildCards();
-  for (const slot of SLOTS) {
-    state.shows[slot] = prepareShow(state.presets[CONFIG.defaultShows[slot]]);
-    state.stats[slot] = stats(state.shows[slot]);
-  }
+  const want = decodeState(location.search);
+  const loaded = await Promise.all(SLOTS.map((slot) => initialShow(slot, want[slot])));
+  SLOTS.forEach((slot, i) => setSlot(slot, loaded[i].show));
+  if (loaded.some((r) => !r.ok)) toast("Couldn't load a show from the link, so a preset stands in.");
+  state.mode = want.mode;
+  syncModeButtons();
   state.widthFrac = targetWidths();
   els.status.textContent = "";
   renderLabels();
+  renderRivalries();
   drawAll();
   bindScrubbing();
   bindMode();
   bindSearch();
   bindStats();
+  bindHeaderButtons();
   bindResize();
-  setP(0, false);
+  setP(want.p, false);
 }
 
 init();

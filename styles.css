@@ -48,12 +48,26 @@ body {
 /* Strips, scrubber and cards stay together, centred in the space under the
    header; on short screens the strips give up height first. */
 .stage {
-  display: grid;
-  grid-template-rows: minmax(0, auto) auto auto;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: var(--gap);
   min-height: 0;
 }
+.stage > * { flex: none; }
+.stage > .strips { flex: 0 1 auto; }
+
+/* Rivalry pills: only where there's height to spare (phones get them in the
+   search dropdown instead). */
+.rivalries { display: flex; flex-wrap: wrap; gap: 8px; padding-left: calc(var(--label-w) + 12px); }
+.rivalries:empty { display: none; }
+.rivalries button {
+  height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; font-weight: 600;
+}
+.rivalries button:hover, .rivalries button:focus-visible { color: var(--fg); border-color: var(--fg); outline: none; }
+.rivalries button[aria-pressed="true"] { color: var(--fg); border-color: var(--band-0); }
+@media (max-height: 560px) { .rivalries { display: none; } }
 
 /* Header */
 .top { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 0; }
@@ -108,7 +122,13 @@ body {
   flex: none; height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-weight: 700;
 }
-.btn-pill[aria-expanded="true"] { background: var(--fg); color: var(--bg); }
+.btn-pill[aria-expanded="true"], .btn-pill[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.btn-icon-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 0 12px; }
+.btn-icon-pill svg { width: 18px; height: 18px; flex: none; }
+.wide-label { display: none; }
+@media (min-width: 1000px) { .wide-label { display: inline; } }
+/* Phones: the strip labels already name the shows. */
+@media (max-width: 900px) { .matchup { display: none; } }
 
 /* Strips: labels | tracks. The track overlay spans both strips and holds
    the laser, so the barcodes are never redrawn while scrubbing. */
@@ -325,7 +345,7 @@ button.stat:hover, button.stat:focus-visible { border-color: var(--fg); outline:
 /* Portrait fallback once the prompt is dismissed: functional, scrolls. */
 @media (orientation: portrait) and (max-width: 700px) {
   .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto; align-content: start; }
-  .stage { align-content: start; }
+  .stage { justify-content: flex-start; }
   .top { flex-wrap: wrap; }
   .strips { grid-template-rows: 64px 16px 64px 16px; }
   .cards { grid-template-columns: 1fr; }

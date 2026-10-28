@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   prepareShow, bandIndex, ratingToBand, PALETTES, layout, episodeAt, maxMinutes,
   segments, episodeCode, formatDelta, hoursIn, hasEnoughData, stats, whiplashLabel,
-  positionOf, fromTvmaze,
+  positionOf, fromTvmaze, encodeState, decodeState, snapP, CONFIG,
 } from "./core.js";
 
 const mk = (eps) => prepareShow({ id: 1, name: "T", year: 2000, episodes: eps });
@@ -122,4 +122,20 @@ test("stats cope with tiny and unrated shows", () => {
   assert.equal(two.drop, null);
   const none = stats(mk([{ s: 1, e: 1, rating: null, runtime: 30 }]));
   assert.deepEqual(none, { golden: null, whiplash: null, drop: null });
+});
+
+test("URL state round-trips and tolerates junk", () => {
+  const st = { a: 169, b: 82, p: 0.6543, mode: "hours" };
+  const qs = encodeState(st);
+  assert.equal(qs, "a=169&b=82&at=65.43&mode=hours");
+  assert.deepEqual(decodeState("?" + qs), st);
+  assert.equal(encodeState({ ...st, p: 0.65 }), "a=169&b=82&at=65&mode=hours");
+  assert.deepEqual(decodeState("?a=abc&at=500&mode=nope"), { ...CONFIG.defaultShows, p: 1, mode: "pct" });
+  assert.deepEqual(decodeState(""), { ...CONFIG.defaultShows, p: 0, mode: "pct" });
+  assert.equal(snapP(0.123456), 0.1235);
+});
+
+test("every rivalry is a preset", () => {
+  const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
+  for (const r of CONFIG.rivalries) assert.ok(presets[r.a] && presets[r.b], r.name);
 });
