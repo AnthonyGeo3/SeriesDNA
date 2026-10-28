@@ -1,211 +1,314 @@
-# Series DNA: Build Plan (hand-off to Claude Code)
+# Series DNA: Product Requirements
 
-> Read this whole file first. Work **one phase at a time**. After each phase: run it, tell me what works / what's rough, and stop for my go-ahead. Keep everything runnable by opening `index.html` (or `npx serve`) with no build step.
+> **Status (28 Oct 2026):** live at https://anthonygeo3.github.io/SeriesDNA/. All build phases are done (section 10). This document describes the app **as built**. Section 10 also lists where it now differs from the original plan, and why. Section 12 covers known limitations and parked ideas.
 
 ## 1. What we're building
 
-Series DNA turns any TV show into a horizontal colour barcode, one vertical band per episode, coloured by rating. Two shows are stacked so you can see where each hit its golden era, sagged in the middle, and stuck (or crashed) the landing. A thumb scrubber sweeps a laser line across both strips while head-to-head episode cards update live.
+Series DNA is a fun website for comparing TV shows. It turns any show into a horizontal colour barcode, one vertical band per episode, coloured by rating. Two shows are stacked so you can see where each hit its golden era, sagged in the middle, and stuck (or crashed) the landing.
+
+A scrubber sweeps a laser line across both strips while head-to-head episode cards update live. A **tale of the tape** says who wins the matchup and why. A **Higher or Lower** game gives people a reason to stay.
+
+It's built for a two-minute live demo to a team (section 13), and also for people who land on a shared link cold, often on a phone held upright.
 
 ### Decisions locked
 - **Exactly 2 shows** (slots A and B). No 3-show mode.
-- **Landscape-first.** Laptop (landscape by nature) must always look great. On a phone it must work, but we nudge the user to rotate. Portrait shows a dismissible "rotate your phone" overlay.
-- **Stack:** vanilla HTML + CSS + ES6 modules-free JS, `<canvas>` for barcodes, no bundler.
-- **Styling:** plain CSS with custom properties. *Not* Tailwind CDN: the room Wi-Fi is already a stated risk and a CDN script is a needless dependency.
-- **Hosting:** GitHub Pages from the repo root. Everything (including data) is served as static files.
-- **Data:** TVmaze public API (no key, CORS-enabled) for live search + a pre-baked `data/presets.json` so the demo never depends on Wi-Fi.
+- **Works everywhere, with no rotate nag.** The laptop view must always look great. A landscape phone fits with no vertical scroll. Portrait is a first-class layout: the full-screen "rotate your phone" overlay was removed so cold visitors aren't blocked.
+- **Stack:** vanilla HTML, CSS and JS as ES modules (`<script type="module">`), with `<canvas>` for the barcodes. No bundler and no build step.
+  - Modules and `fetch()` don't work over `file://`, so run it locally with `npx serve`. The page says so if opened as a file.
+- **Styling:** plain CSS with custom properties. No CDN scripts or fonts, because room Wi-Fi is a known risk.
+- **Hosting:** GitHub Pages from the root of `main`. Merging to `main` deploys in about a minute.
+- **Data:** the TVmaze public API (no key, CORS-enabled) for live search, plus a pre-baked `data/presets.json`, so the presets never depend on Wi-Fi.
 
-## 2. De-risk first (Phase 0, ~20 min)
+## 2. What a visitor sees
 
-These could sink the idea, so test them before building UI.
-
-1. **Rating coverage.** TVmaze episode ratings (`rating.average`) are often `null` for some episodes, and are less dense than IMDb. Write `scripts/audit.mjs` that, for the ~15 preset shows, prints: episode count, % of episodes with a rating, min/max/mean rating. If a preset has under ~85% coverage or a very flat range (everything 7.5–8.5), swap it for a better one. **If many iconic shows look bad, tell me before continuing**; fallback is baking presets at build time from TMDB/OMDb using a key kept in a local env var (never committed), while live search stays on TVmaze.
-2. **Soaps and mega-shows.** Long-running soaps (Coronation Street, EastEnders) have thousands of episodes and mostly empty ratings. Guard: if a searched show has more than ~1,500 episodes or under 50% rated episodes, show a friendly "Not enough rating data to build a DNA strip" message instead of a broken bar.
-3. **Landscape phone height.** A Pixel in landscape with browser chrome gives roughly 340–380px of vertical space. The layout in section 7 is budgeted for this. Use `dvh`/`svh`, never `vh`.
-4. **Palette accessibility.** The default "Cinema Neon" scale runs emerald to crimson, which is a red/green problem for colour-blind viewers, in front of designers. Build the palette as a swappable config object from day one (section 6) so the Okabe-Ito/Viridis option is a 10-minute job, not a refactor.
+1. **Header:**
+   - Logo, plus the "A vs B" matchup chips on wide screens.
+   - A search box.
+   - **Stats**, the **palette** switch, and **Share**.
+   - A filled, coloured **Play** button for the game: "Play Higher or Lower" on wide screens. It pulses until the game has been opened once.
+2. **Colour key and verdict:** one line above the strips. It reads "Episode rating: 8.8+ · 8.4+ · 8.0+ · 7.6+ · <7.6 · no rating", with a swatch for each band, followed by the verdict, e.g. "⚖ Breaking Bad wins 5–1 · see why".
+3. **The two barcodes**, The Boys vs Grey's Anatomy by default:
+   - Season ticks underneath each strip.
+   - A coverage chip on each label ("99% rated") and the total hours.
+   - Golden Era and Drop-Off markers drawn on the strips.
+   - On a first visit, a **"Drag across the strips"** hint sits on top until the strips are first used.
+4. **Controls:** a **% Lifespan / Hours** toggle and the scrubber slider.
+5. **Head-to-head cards:** the episode under the laser in each show. Each shows the code, title, rating, the difference from that show's average, and hours watched so far.
+6. **Tale of the tape:** six rounds with a winner on each and an overall verdict. It sits between the cards on laptops and below them in portrait. On a landscape phone it opens from the verdict, inside the Stats sheet.
 
 ## 3. File structure
 
 ```
 /index.html
 /styles.css
-/app.js              (UI wiring, state, events)
-/core.js             (pure functions: layout, position mapping, stats, colour; no DOM)
-/render.js           (canvas drawing + animation)
-/data/presets.json   (generated, committed)
-/scripts/audit.mjs   (Phase 0)
+/app.js              UI wiring, state, events: strips, cards, search, stats sheet, tape, URL state, sharing
+/core.js             pure logic, no DOM: data prep, colour, layout, position mapping, stats, tale of the tape, game logic, URL state
+/render.js           canvas drawing: strips, markers, season ticks
+/game.js             the Higher or Lower screen
+/dom.js              tiny h() element builder (text always via textContent, never HTML)
+/core.test.mjs       node --test unit tests for core.js and the preset data
+/data/presets.json   generated, committed (15 shows, ~165 KB)
+/scripts/lib.mjs     shared helpers and the preset list for the two scripts below
+/scripts/audit.mjs   rating-coverage audit
 /scripts/build-presets.mjs
-/manifest.webmanifest, /icon-192.png, /icon-512.png   (Phase 3, optional PWA polish)
-/PLAN.md
+/manifest.webmanifest, /icon-192.png, /icon-512.png   home-screen install
+/og.png              social preview image (default matchup)
+/PRD.md
 ```
-Keep `core.js` free of DOM access so it's easy to sanity-check in Node (`node -e` or a tiny `core.test.mjs` with `assert`). Load with `<script type="module">` (fine on GitHub Pages).
 
 ## 4. Data layer
 
 ### TVmaze endpoints
-- Search: `https://api.tvmaze.com/search/shows?q={query}`
-- Episodes: `https://api.tvmaze.com/shows/{id}/episodes` (specials excluded by default, which is what we want)
-- Rate limit is generous (about 20 calls/10s). One episodes call per show, so no issue.
+- **Search:** `https://api.tvmaze.com/search/shows?q={query}`
+- **Show with episodes, one call** (used for live loads): `https://api.tvmaze.com/shows/{id}?embed=episodes`
+- **Episodes** (used by the build scripts): `https://api.tvmaze.com/shows/{id}/episodes`
+- Specials are excluded, which is what we want: they have no episode number.
 
-### Normalised model (the only shape the UI ever sees)
+### Normalised model (the only shape the UI sees)
 ```js
 Show = {
-  id: 1234,                 // TVmaze id (used in URLs)
-  name: "The Boys",
-  year: 2019,
-  episodes: [               // aired order, specials excluded
-    { s: 1, e: 1, title: "The Name of the Game", rating: 8.6 | null, runtime: 60 }
-  ],
-  // derived once, on load:
-  n: 32,
-  rated: 31,                // count with non-null rating
-  avg: 8.4,                 // mean of rated episodes
-  cumMinutes: [60, 120, ...]  // prefix sums for hours-mode lookups
+  id: 1234, name: "The Boys", year: 2019,
+  episodes: [{ s: 1, e: 1, title: "The Name of the Game", rating: 8.6 | null, runtime: 60 }],
+  // derived on load by prepareShow():
+  n, rated, avg, coverage, cumMinutes, totalMinutes, startsPct, startsHours, seasons: [{ s, start }]
 }
 ```
-- `runtime` null falls back to show `averageRuntime`, then 45.
-- Null ratings render as a neutral dark-grey "no data" band, are excluded from stats, and the card shows "No rating". Show a small coverage chip ("97% rated") on each strip label.
+- `fromTvmaze()` in `core.js` builds this model for both the build scripts and live search, so the two can't drift.
+- A missing `runtime` falls back to the show's `averageRuntime`, then 45 minutes.
+- Unrated episodes draw as a dark-grey "no rating" band, are left out of all stats, and the card says "No rating".
 
-### Caching
-- `localStorage` key `sdna:v1:show:{id}` with try/catch around every read/write (private mode can throw). Cache live-fetched shows so reloads are instant.
-- Presets come from `data/presets.json`, keyed by id, loaded first. A live fetch happens only for non-preset shows.
+### Presets (`data/presets.json`)
+These 15 shows are 97–100% rated, each pinned to its TVmaze id:
+- The Boys (15299), Grey's Anatomy (67), Silo (38052), Peaky Blinders (269), Breaking Bad (169)
+- Succession (23470), Game of Thrones (82), The Office US (526), Lost (123), Stranger Things (2993)
+- Better Call Saul (618), The Wire (179), Friends (431), Dexter (161), The Simpsons (83)
 
-### `scripts/build-presets.mjs` (Node 18+, global `fetch`)
-- Input: list of show names (The Boys, Grey's Anatomy, Silo, Peaky Blinders, Breaking Bad, Succession, Game of Thrones, The Office (US), Lost, Stranger Things, plus 3-5 more crowd-pleasers).
-- For each: search, **print the top 3 matches with year and id** and pick by an explicit `{ name, id }` override table (avoids grabbing the UK Office or a reboot). Fetch episodes, write only the fields in the model above, minified keys optional.
-- Output `data/presets.json`. Print final file size (target under ~400KB) and per-show coverage.
+`scripts/build-presets.mjs` matches each show by name **and** premiere year, prints the top 3 search matches, and fails if the match isn't the pinned id. That stops it grabbing the UK Office or a reboot.
 
-## 5. Core logic (`core.js`, pure and testable)
+`scripts/audit.mjs` reports per show: episode count, seasons, percentage rated, min/max/mean and standard deviation. It flags low coverage (under 85%), a flat range (less than 1.0 between min and max), and shows that would hit the guard below. Coronation Street is audited only to prove the guard works.
 
-- `ratingToBand(rating, palette)` returns a colour from thresholds: `>=9.0`, `>=8.0`, `>=7.0`, `>=6.0`, else lowest; `null` returns the no-data colour.
-- `layout(show, mode, maxMinutes)` returns `{ widthFrac }` for the strip: `1` in `pct` mode; `totalMinutes / maxMinutes` in `hours` mode.
-- **Position mapping.** Scrubber position `p` is in `[0,1]` of the *bar width*.
-  - `pct` mode: `idx = min(n-1, floor(p * n))` for each show.
-  - `hours` mode: `minutes = p * maxMinutes`; binary-search `cumMinutes` for the episode containing it. If `minutes > show.totalMinutes`, that show is "finished": card shows its finale, dimmed, with "Ended".
-- `stats(show)`:
-  - **Golden Era:** best rolling mean over a window of 5 rated episodes (if `rated < 5`, window = `rated`). Report start/end SxEy and the mean.
-  - **Whiplash:** population standard deviation of rated episodes. Label: `< 0.35` Consistent, `0.35 to 0.6` Bumpy, `> 0.6` Chaotic (tune after seeing real data).
-  - **The Drop-Off:** location (as % of lifespan) of the lowest rolling mean, using window `max(5, round(n * 0.05))`, ignoring the first and last 5% to avoid trivial edge dips.
-  - **Delta vs average:** `episode.rating - show.avg`, shown with sign, one decimal.
-- Keep thresholds and window sizes in one `CONFIG` object at the top.
+When run behind an HTTPS proxy (as in the cloud dev container), both scripts need `NODE_USE_ENV_PROXY=1`, on Node 22.21 or later.
+
+### Guard: soaps and mega-shows
+A show with more than 1,500 episodes, or fewer than 50% rated, gets "Not enough rating data to build a DNA strip for X." and the current show stays in place.
+
+### Storage (`localStorage`)
+Every read and write is wrapped in try/catch, because private mode can throw.
+
+| Key | What |
+|---|---|
+| `sdna:v1:show:{id}` | live-fetched shows, so reloads are instant and the game can use them |
+| `sdna:v1:palette` | `neon` or `okabe` |
+| `sdna:v1:dragged` | the drag hint has been dismissed |
+| `sdna:v1:played` | the Play button has stopped pulsing |
+| `sdna:v1:hilo-mode` | the last game mode played |
+| `sdna:v1:hilo-best:show` / `:season` | the best game score for each mode |
+
+## 5. Core logic (`core.js`, pure and tested)
+
+All thresholds live in one `CONFIG` object.
+
+- **Colour bands:** 8.8+, 8.4+, 8.0+, 7.6+, and below 7.6. `null` is the no-data colour.
+  - The plan's original 9/8/7/6 left most shows two-tone, because TVmaze ratings cluster around 8.
+  - With these thresholds the presets spread roughly 17% / 20% / 26% / 21% / 16% across the five bands.
+- **Strip width:** `layout(show, mode, maxMinutes)` gives `widthFrac`. It's 1 in `pct` mode, and `totalMinutes / maxMinutes` in `hours` mode.
+- **Position mapping:** the scrubber position `p` is in [0,1] of the bar width.
+  - In `pct` mode, the episode is `min(n-1, floor(p·n))`.
+  - In `hours` mode, the code binary-searches `cumMinutes`. Past the end of a show, its card shows its last episode, dimmed, with an "Ended" chip.
+  - Positions snap to steps of 1/10,000 (`CONFIG.steps`), so a shared link lands on exactly the same episodes. That's fine enough for a 1,500-episode show.
+- **Stats:**
+  - **Golden Era:** the best rolling mean over 5 rated episodes.
+  - **Whiplash:** the standard deviation of ratings. Under 0.35 is Consistent, 0.35–0.6 is Bumpy, and over 0.6 is Chaotic.
+  - **Drop-Off:** the lowest rolling mean, over a window of `max(5, round(n·0.05))` episodes. Only the **first** 5% of a show is ignored, to skip weak pilots; finales count, so Game of Thrones' S8 crash shows up.
+  - **Delta:** episode rating minus show average, with a sign and one decimal.
+- **Season averages:** `seasonAverages(show)` only counts seasons with at least 3 rated episodes (`CONFIG.minSeasonRated`). Both the tale of the tape and the game use it.
+- **Tale of the tape:** `tale(a, b)` runs six rounds:
+
+  | Round | Winner |
+  |---|---|
+  | Average episode | higher |
+  | Peak run (the Golden Era mean) | higher |
+  | Best season | higher |
+  | Worst season | higher (the less bad low wins) |
+  | Consistency (std dev) | lower |
+  | Latest season | higher |
+
+  Each round is judged on the value *as shown* (1 decimal place, or 2 for the std dev), so numbers that look equal are a tie. The overall verdict is "X wins 4–2" or "Dead heat, 3–3".
+- **URL state:** `?a=<id>&b=<id>&at=<percent>&mode=pct|hours`.
+  - `at` has up to 2 decimals.
+  - Parsing is lenient: junk falls back to the defaults.
+  - Always TVmaze ids, never slugs.
+- **Game logic:** `gameItems`, `pickNext`, `judge` and `gameGap` (section 8).
 
 ## 6. Rendering and interaction
 
 ### Canvas (`render.js`)
-- One `<canvas>` per strip, sized from `getBoundingClientRect()` × `devicePixelRatio`; redraw on resize and orientation change.
-- Draw each episode as a rect. When an episode would be under 1 device pixel wide (long shows on narrow screens), bucket by pixel column and average the ratings so nothing aliases away.
-- Season dividers: short tick marks under the strip with "S1, S2…" labels (hide labels if they'd collide, keep ticks).
-- **Laser line:** a separate absolutely-positioned element (`transform: translateX`) spanning both strips; don't redraw the barcodes on every pointer move.
-- **Normalisation toggle animation:** tween each strip's `widthFrac` over about 500ms (ease-in-out) via `requestAnimationFrame`, redrawing the strips each frame.
+- One canvas per strip and one per tick row, sized to the CSS box × `devicePixelRatio`. They're redrawn on resize, zoom and rotation.
+- Wide episodes are drawn one rectangle each, pixel-snapped so there are no seams, with a hairline gap between episodes (but none after the last, so the strip ends flush).
+- When episodes would be narrower than a device pixel, each pixel column averages the episodes it overlaps, so nothing aliases away.
+- **Season ticks** label "S1, S2…". Labels that would collide are hidden, but every tick stays.
+- **Markers:** Golden Era is a solid outline with a "★ Golden era" pill at the top. Drop-Off is a dashed outline with a "Drop-off" pill at the bottom, so the two pills never collide. Both are hidden on strips too narrow to carry them, such as The Boys' sliver in Hours mode.
+- **Laser:** a separate element moved with `transform`, so the barcodes are never redrawn while scrubbing.
+- **Toggle animation:** strip widths animate over 500ms (ease-in-out), and also whenever a new show changes the longest runtime. With reduced motion it's instant.
 
-### Palette config
+### Palettes
+Colours are defined once and never hard-coded in draw code. The CSS gets them as `--band-0..4`, `--ink-0..4` and `--nodata`.
+
 ```js
 PALETTES = {
-  neon:   { name: "Cinema Neon", bands: [/* >=9, >=8, >=7, >=6, <6 */], noData: "#2a2f3a" },
-  okabe:  { name: "Colour-blind safe", bands: [...], noData: "#2a2f3a" }
+  neon:  { name: "Cinema Neon",       bands: ["#00e5a0", "#8be04e", "#f5d13d", "#ff8a3d", "#ff3d6e"], noData: "#2a2f3a" },
+  okabe: { name: "Colour-blind safe", bands: ["#fde725", "#5ec962", "#21918c", "#3b528b", "#5b2a86"], noData: "#2a2f3a" },
 }
 ```
-Colours must be defined once (CSS variables or this object), never hard-coded in draw code. For the colour-blind palette use a sequential, perceptually ordered scale (Viridis-style or Okabe-Ito picks ordered by lightness) so rating order is readable without hue.
+The colour-blind palette uses Viridis stops ordered by lightness, so the rating order reads without relying on hue. The colour key and the tape's winner ticks follow the palette switch.
 
 ### Scrubber
-- Pointer Events on the strip area (`pointerdown/move/up`, `setPointerCapture`, CSS `touch-action: none` on the strips so dragging doesn't scroll the page).
-- A chunky `<input type="range" min=0 max=1000>` below the strips, two-way synced with the laser line (also gives free keyboard support and accessibility).
-- Update cards inside a `requestAnimationFrame` batch, not on every raw event.
-- **Haptics (Pixel/Android Chrome):** `navigator.vibrate(8)` when the laser crosses a season boundary in either show. Feature-detect; silently do nothing on iOS/laptop. This is a cheap, memorable "tactile delighter".
+- Dragging uses Pointer Events with pointer capture and `touch-action: none`.
+- A `range` input below the strips stays synced with the laser, which gives keyboard support. Screen readers hear both current episodes as `aria-valuetext`.
+- Card updates are batched to one per animation frame.
+- During a fast drag the card text updates instantly. The flip animation only plays when stepping slowly (gaps over 150ms), and never with reduced motion.
+- **Haptics:** an 8ms `navigator.vibrate` when the laser crosses a season boundary. This works on Android; elsewhere it does nothing.
+- **First-visit hint:** "⟵ ⟶ Drag across the strips" sits over the strips until the first drag or slider move. It's remembered after that.
 
-### Cards (head-to-head)
-Per show: title · `S03E06` · episode title (truncate with ellipsis) · big `★ 9.4` · delta chip (`+0.8`, coloured by the rating band, not green/red) · `24.5 hrs in`. Subtle flip/fade animation on episode change; respect `prefers-reduced-motion`.
+### Cards
+Each card shows: show name · `S03E06` · episode title (truncated with an ellipsis) · a big `★ 9.4` · the delta chip (coloured by the rating band, never green/red) · `24.5 hrs in`. A coloured accent bar on the left matches the band.
+
+### Search
+- With an empty query it lists the presets, labelled "work offline".
+- Typing matches presets instantly. From 2 characters it also searches TVmaze, 300ms after you stop typing, cancelling any earlier request (`AbortController`). Up to 5 live results appear, with preset duplicates removed.
+- Each result has **→ A** and **→ B** buttons to pick the slot.
+- A loading skeleton covers the strip while a show fetches.
+- If the fetch fails, a toast says so: "You're offline. The presets still work." or "Couldn't reach TVmaze…".
+- **Landscape phone keyboard workaround:** Android lays the keyboard over most of the screen, so:
+  - The keyboard's search key (`enterkeyhint="search"`) searches immediately and closes the keyboard.
+  - Touching the results list also closes it.
+  - The dropdown sizes itself to the space visible above the keyboard (`visualViewport`), so the first result is always tappable.
+
+### Sharing and the rest
+- The address bar always holds the current state, via `history.replaceState` throttled to 300ms.
+- **Share** uses `navigator.share`, falling back to copying the link with a "Link copied" toast.
+- A link can name shows that aren't presets: they load from the cache or live. If one can't be loaded, a preset stands in and a toast explains.
+- **Stats sheet:** a bottom drawer on phones and a side panel (380px) on wide screens, where the app makes room so you can keep scrubbing.
+  - It leads with the tale of the tape, then Golden Era, Whiplash and Drop-Off for each show.
+  - Tapping a stat jumps the laser there. On phones the drawer closes so you see it land.
+- **Open Graph tags** point at `https://anthonygeo3.github.io/SeriesDNA/og.png`, a static screenshot of the default matchup.
+- **Manifest:** `display: standalone`, `orientation: any`, with 192px and 512px icons (the 512px one is maskable).
 
 ## 7. Layout
 
-### Landscape grid (target viewport 700×360 up to desktop)
-```
-┌──────────────────────────────────────────────────────────────┐
-│ SERIES DNA   [A: The Boys ▾] vs [B: Grey's ▾]   🔎  presets… │ ~40px
-├──────────────────────────────────────────────────────────────┤
-│ The Boys      ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│ ~64px
-│ S1 | S2 | S3 | S4                                            │ ~12px
-│ Grey's Anat.  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│ ~64px
-│ S1 | S2 | S3 ... S21                                         │ ~12px
-├──────────────────────────────────────────────────────────────┤
-│ ◀━━━━━━━━━━━━━●━━━━━━━━━━━━━━▶  [% Lifespan | Hours]  [Stats]│ ~44px
-├────────────────────────────┬─────────────────────────────────┤
-│ CARD A                     │ CARD B                          │ ~100px
-└────────────────────────────┴─────────────────────────────────┘
-```
-- Use CSS grid with `grid-template-rows` in `fr`/`clamp()`; on desktop the strips grow taller (up to ~120px each) and typography scales with `clamp()`.
-- The analyst badges (Golden Era, Whiplash, Drop-Off) live in a **Stats sheet** (bottom drawer on phone, side panel on wide screens) so they don't eat the 360px budget. On very wide desktops they can be always-visible beside the cards.
-- Respect `env(safe-area-inset-*)` (notches in landscape).
-- Dark theme, glassy cards (`backdrop-filter` with a solid fallback), generous tap targets (minimum 44px).
+Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type, `env(safe-area-inset-*)` padding, minimum 44px tap targets, and a dark theme with glassy cards (`backdrop-filter`, with a solid fallback).
 
-### Portrait phone behaviour
-- Detect with `matchMedia("(orientation: portrait) and (max-width: 700px)")`.
-- Show a full-screen overlay: animated phone-rotates icon, "Turn your phone sideways for the best view", plus a **"Continue anyway"** button that dismisses it for the session (store in memory, not storage).
-- Try `screen.orientation.lock("landscape")` only after a user gesture and only inside try/catch. On Android it generally works only in fullscreen/installed PWA; iOS Safari doesn't support it, so the overlay is the real mechanism. In `manifest.webmanifest` set `"orientation": "landscape"` for the installed-PWA case.
-- Portrait fallback layout when dismissed: strips full-width stacked, cards below, page may scroll. Not pretty, but functional.
+### Laptop and desktop
+- The header is at the top. The colour key, strips (up to 120px each), controls and cards sit together, centred in the remaining height.
+- At 1000px wide or more, and 561px tall or more, the cards row has three columns: **card A · tale of the tape · card B**.
+- On narrower tall screens, the tape spans the full width below the cards.
 
-## 8. Phases and acceptance criteria
+### Landscape phone (budget about 350px tall)
+- No vertical scroll.
+- The colour key and verdict share one line: below 420px tall the "Episode rating" title and "see why" are dropped.
+- The strips flex down to about 44px each.
+- The tape is hidden, and the verdict opens it in the Stats sheet.
 
-### Phase 0: De-risk (20 min)
-Scripts `audit.mjs` and `build-presets.mjs` run; `data/presets.json` committed; coverage report reviewed with me.
-**Done when:** every preset has good coverage (or we've swapped it), and the file is under ~400KB.
+### Portrait phone
+- **Header, in two rows:** logo and a wide Play button, then search with the icon buttons (Stats becomes a bar-chart icon).
+- **Strips:** full width, 76px each. **A's name sits above the pair and B's below**, so the laser runs unbroken across both.
+- **Controls:** full width, with the toggle on its own row.
+- **Below:** the cards stacked, then the tale of the tape. The page scrolls.
 
-### Phase 1: Barcode engine and scrubber (60 min)
-Static page showing The Boys vs Grey's Anatomy from `presets.json`: normalised barcodes, season ticks, laser line, range slider and strip-drag in sync, head-to-head cards updating live. Landscape layout and the portrait overlay.
-**Done when:** on a laptop and a phone in landscape, dragging across the strips feels instant (no lag on Grey's ~400 episodes) and the cards always match the laser position.
+### Game screen
+- Full screen: a header with the title, the **Show vs Show / Season vs Season** buttons, score, best and close, then the two cards with "vs" between them, the question, and the guess buttons.
+- Spare height is split above the cards and below the buttons, so they stay grouped in the middle.
+- In portrait the cards stack, and the mode buttons get their own row on narrow screens.
 
-### Phase 2: Toggle, live search, stats (60 min)
-- Normalisation toggle (% Lifespan ↔ Hours) with the tween animation; finished shows dim with "Ended".
-- Search box (debounce 300ms, `AbortController`, top 5 results with name and year). Tapping a result asks which slot (A/B) to replace, or just replaces the slot you last interacted with.
-- Loading skeleton on a strip while fetching; friendly error toast if offline; the coverage/size guards from section 2.
-- Stats sheet with Golden Era, Whiplash, Drop-Off. Mark Golden Era and Drop-Off as small markers on the strip.
-**Done when:** searching "Severance" (not a preset) works live, and turning off Wi-Fi leaves presets fully functional.
+## 8. Higher or Lower
 
-### Phase 3: Polish and sharing (60 min)
-- Rivalry preset pills: "Sprint vs Marathon" (The Boys vs Grey's Anatomy), "Stuck the Landing vs Crashed" (Breaking Bad vs Game of Thrones), "Sci-Fi Showdown" (Silo vs Lost).
-- URL state: `?a=<tvmazeId>&b=<tvmazeId>&at=65&mode=pct`, updated with `history.replaceState` (throttled). **Use TVmaze ids, not slugs.** Loading a URL must reproduce the exact moment.
-- Share button: `navigator.share({ url })` with clipboard fallback and a "Link copied" toast.
-- Palette switcher (Cinema Neon ↔ Colour-blind safe), persisted in `localStorage` (try/catch).
-- Open Graph tags (`og:title`, `og:description`, `og:image` with a static screenshot of the default matchup) so links look good when pasted into Teams/Slack.
-- Optional: manifest + icons for "Add to Home Screen".
-**Done when:** a pasted share link opens the right shows at the right position in a fresh browser.
+- **How it plays:** one card shows a rating, the other shows "★ ?". You guess whether the hidden one is rated higher or lower.
+  - A correct guess scores a point, and the revealed card becomes the known one.
+  - One wrong guess ends the game, with **Play again**.
+- **Modes**, picked at the top, each with its own best score, and the last mode remembered:
+  - **Show vs Show:** whole-show averages. Easier, and the default.
+  - **Season vs Season:** single seasons, with at least 3 rated episodes each. It picks a random show first, then one of its seasons, so long-runners don't crowd the rest out.
+- **Pool:** the presets, plus any show the user has searched for before (cached), plus whatever is loaded now. The presets alone give 15 shows and 140 seasons.
+- **Difficulty:** pairs start at least 0.5 apart, and the minimum gap shrinks by 0.04 per point, down to 0.1.
+- **No repeats:** cards seen in the last few rounds (up to 8, fewer for small pools) don't come straight back.
+- **Ties:** ratings are compared as shown (one decimal place), and a tie counts as correct.
+- **Reveal:** the hidden rating counts from the known one to its value over 650ms. The card then shows that show's or season's barcode. Nothing about the hidden card's rating or barcode is visible before the guess.
+- **Controls:** ↑/↓ or H/L on desktop, and Escape closes. Reduced motion skips the count-up and the card pop.
 
-### Phase 4: Deploy and demo prep (30 min)
-Enable Pages (Settings → Pages → deploy from branch, root). Test on a real phone (landscape, rotate prompt, haptics) and on iOS Safari if anyone has one. Hard-refresh test on the live URL. Take the OG screenshot.
+## 9. Accessibility
+- **Contrast:** dark theme with good contrast; delta chips use band colours plus text, never green/red alone.
+- **Colour-blind palette:** perceptually ordered, so rating order doesn't depend on hue.
+- **Keyboard:** the slider, the arrow keys in the game, and Escape for the search, sheet and game.
+- **Screen readers:**
+  - `aria-valuetext` on the scrubber.
+  - Screen-reader-only "(wins)" text in the tape.
+  - The game question is announced through `aria-live`.
+  - The strips have `role="img"` with a summary label.
+- **Reduced motion** turns off the tweens, flips, pulse, hint animation, count-up and card pop.
 
-### Stretch (only if ahead)
-- Overlay sparkline toggle (thin white line of ratings over the colour bands).
-- "Surprise me" button picking a random rivalry from presets.
-- Tiny confetti or pulse when the laser crosses a show's Golden Era.
+## 10. Status and history
 
-## 9. Cut list (if running behind, cut in this order)
-1. Sparkline / stretch items
-2. PWA manifest and icons
-3. Haptics
-4. Colour-blind palette (keep the config structure though)
-5. Live search (presets only still makes a good demo; this is the last thing to cut because "search your own favourite show" is the best audience hook)
+### Phases (all done)
+- **Phase 0, data de-risk:** the audit and preset build ran. Coverage was excellent, so the TMDB/OMDb fallback wasn't needed. The bands were retuned (section 5).
+- **Phase 1, barcode engine and scrubber:** done. 60fps dragging Grey's (471 episodes), measured in a headless browser with the CPU throttled.
+- **Phase 2, toggle, live search and stats:** done. Searching "Severance" works live, and the presets work offline.
+- **Phase 3, polish and sharing:** done. Share links round-trip in a fresh browser.
+- **Phase 4, deploy:** done. Live on Pages, and real-phone testing found the issues fixed in the changes below.
+- **After launch:** the Higher or Lower game, the colour key, the tale of the tape, and the portrait layout.
 
-Never cut: the normalised barcodes, the scrubber, the cards, the toggle.
+### Changes from the original plan
+| Original plan | Now | Why |
+|---|---|---|
+| Bands at 9 / 8 / 7 / 6 | 8.8 / 8.4 / 8.0 / 7.6 | TVmaze ratings cluster around 8; the old bands made most strips two-tone |
+| Drop-Off ignored the first **and last** 5% | First 5% only | Ignoring the end hid Game of Thrones' S8 crash |
+| "modules-free JS", runnable from `index.html` | ES modules; run with `npx serve` locally | The plan contradicted itself (`type="module"`); Pages is unaffected |
+| Rivalry pills ("Sprint vs Marathon"…) | Removed | Feedback: let people explore their own favourite shows |
+| Landscape-first; full-screen rotate overlay in portrait; orientation lock; manifest forced landscape | Portrait is a proper layout; overlay, lock and forced orientation removed | Cold visitors from shared links mostly hold phones upright |
+| Analyst stats only in the Stats sheet | Plus a tale of the tape with a verdict on the main screen | Visitors want to know who wins, not just see numbers |
+| No colour key | A colour key above the strips, and a first-visit drag hint | Nothing explained the colours or that the strips can be dragged |
+| Slider 0–1000 only | Slider 0–1000, positions snapped to 1/10,000 | So links reproduce the exact episodes on very long shows |
+| No game | Higher or Lower, two modes | Makes the site fun beyond a single comparison |
 
-## 10. Test checklist
-- [ ] Phone landscape (Pixel): no vertical scroll in default view; overlay appears in portrait; "Continue anyway" works
-- [ ] Laptop at about 1440×900 and a small laptop window: layout stays balanced
-- [ ] Grey's Anatomy drags at smooth frame rate; no blurry strips on a hi-DPI display
-- [ ] Toggle animation is smooth and ends exactly at the target widths
-- [ ] Null-rating episodes render as no-data and don't break stats
-- [ ] Offline: presets work; live search fails gracefully with a message
-- [ ] Share link round-trips (shows, position, mode)
-- [ ] Reduced-motion setting disables flips and tweens
+## 11. Test checklist
 
-## 11. Two-minute demo script
-1. **Open the link, say nothing.** The Boys vs Grey's Anatomy glow on screen. "This is every episode of two shows, squashed onto the same scale."
-2. **Drag the scrubber** slowly through Grey's. "Watch the slump arrive." Pause on the Drop-Off marker and the stats sheet.
-3. **Hit the toggle:** The Boys shrinks to a sliver next to Grey's. "This is the time commitment."
-4. **Take a suggestion from the room**, search their favourite show live, drop it in.
-5. **Hit Share**, paste the link into the team chat, and let people open it on their own phones.
-6. Close with the palette switch: "and it's colour-blind safe", for the designers.
+**Automated:** `node --test` runs 18 unit tests over `core.js` and the preset data. They cover bands, mapping, segments, stats, the tale of the tape, URL state, the game picker and judging, and that every preset passes the guard.
 
-## 12. Suggested prompts for Claude Code
-1. "Read PLAN.md. Do Phase 0 only: write the audit and preset-build scripts, run them, and report coverage per show. Stop."
-2. "Phase 1. Build the barcode engine, scrubber and cards per sections 5-7. Keep core.js pure. Stop when it runs."
-3. "Phase 2 as specced, then show me the stats on three shows so I can sanity-check the thresholds."
-4. "Phase 3, then run through the section 10 checklist and tell me what fails."
+**Browser checks** were run with Playwright against both local and live builds. These scripts aren't committed (see section 12).
+- [x] Phone landscape (780×350): no vertical scroll; the colour key and verdict fit on one line; strips about 44px
+- [x] Portrait (412 wide): no rotate blocker, full-width strips, no sideways scroll, dragging updates both cards
+- [x] Laptop 1440×900 and 1100×680: no overflow; tape between the cards
+- [x] No blurry strips on high-resolution screens (canvas backing store = CSS size × DPR)
+- [x] Toggle ends exactly at the target widths
+- [x] Unrated episodes show "No rating" without breaking stats
+- [x] Offline: presets swap, and live search fails with a message
+- [x] A share link round-trips shows, position and mode in a fresh browser, including a live (non-preset) show
+- [x] Reduced motion turns off flips and tweens
+- [x] Keyboard workaround: the first result stays tappable above a simulated keyboard, and the search key closes it
+- [x] Game: scoring, per-mode best scores, no peeking, no quick repeats, and the layout on all three sizes
+- [~] Dragging smoothness:
+  - At 4× CPU throttle, a steady 60fps everywhere.
+  - At 6× on the current (slower) dev machine, both this build and the previous one drop frames. The newer UI costs about 6% more per frame (roughly 3.15ms against 2.96ms, unthrottled).
+- [ ] Real devices (manual): Android haptics; iOS Safari; the link preview in Teams/Slack
+
+## 12. Known limitations and parked ideas
+- **Data quality:**
+  - TVmaze ratings cluster between about 7.5 and 9, and smaller shows have few voters, so this is fun, not authoritative.
+  - Some runtimes are slot lengths: Grey's is listed at 60 minutes, so Hours mode overstates it (471 hours rather than about 340).
+- **Show vs Show is tight:** most whole-show averages sit between 7.8 and 8.5, so rounds are often 0.1–0.2 apart, and ties (which count as correct) are common. Searching more shows adds variety.
+- **Offline needs the page already loaded.** There's no service worker, by choice: a stale cache straight after a deploy is a demo risk.
+- **The social preview is static:** every link shows the default matchup image. Static Pages can't make one per link.
+- **No committed browser tests:** the Playwright checks above live outside the repo.
+- **Parked ideas:** sharing a game score, a "Surprise me" random matchup, season-average strips, and an overlay sparkline. These are considered fine to leave out for now.
+
+## 13. Two-minute demo script
+1. **Open the link and say nothing.** The Boys vs Grey's Anatomy glow on screen, with the colour key above. "This is every episode of two shows, squashed onto the same scale."
+2. **Drag the scrubber** slowly through Grey's. "Watch the slump arrive." Pause on the Drop-Off marker.
+3. **Point at the tale of the tape.** "And it tells you who actually wins." Hit the toggle: The Boys shrinks to a sliver next to Grey's. "This is the time commitment."
+4. **Take a suggestion from the room**, search their favourite show live, and drop it in.
+5. **Hit Share**, paste the link into the team chat, and let people open it on their phones. Portrait works now, so there's no rotate prompt.
+6. **Hit Play** for Higher or Lower: "beat my score". Close with the palette switch: "and it's colour-blind safe", for the designers.
+
+## 14. Working on it
+- **Run locally:** `npx serve` in the repo root. Tests: `node --test`.
+- **Rebuild presets:** edit `PRESETS` in `scripts/lib.mjs`, then run `node scripts/audit.mjs` and `node scripts/build-presets.mjs`, and commit `data/presets.json`.
+- **Deploy:** merge to `main`. Pages redeploys in about a minute, and browsers may cache the old files for up to 10 minutes, so pull to refresh.
