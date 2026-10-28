@@ -5,6 +5,8 @@ import {
   snapP, encodeState, decodeState,
 } from "./core.js";
 import { drawStrip, drawTicks } from "./render.js";
+import { h } from "./dom.js";
+import { createGame } from "./game.js";
 
 const API = "https://api.tvmaze.com";
 const SLOTS = ["a", "b"];
@@ -52,17 +54,6 @@ const els = {
 };
 let trackWidth = 0;
 let theme = null;
-
-// Tiny DOM builder; text always goes in via textContent, never as HTML.
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else if (v != null) el.setAttribute(k, v);
-  }
-  el.append(...children.filter((c) => c != null));
-  return el;
-}
 
 function applyPalette(palette) {
   const root = document.documentElement.style;
@@ -643,7 +634,35 @@ function savedPalette() {
   }
 }
 
+// Everything the game can ask about: presets, shows searched for before
+// (cached) and whatever is loaded now.
+function gameShows() {
+  const byId = new Map(Object.values(state.presets).map((raw) => [raw.id, raw]));
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(CACHE_PREFIX)) continue;
+      const raw = JSON.parse(localStorage.getItem(key));
+      if (raw?.episodes?.length && hasEnoughData(prepareShow(raw))) byId.set(raw.id, raw);
+    }
+  } catch {
+    // No storage: presets are plenty.
+  }
+  for (const show of Object.values(state.shows)) if (show) byId.set(show.id, show);
+  return [...byId.values()];
+}
+
 function bindHeaderButtons() {
+  const game = createGame({
+    getShows: gameShows,
+    getStyle: () => ({ palette: state.palette, theme }),
+    reducedMotion,
+  });
+  $("#game-open").addEventListener("click", (e) => {
+    closeSearch();
+    toggleStats(false);
+    game.open(e.currentTarget);
+  });
   els.share.addEventListener("click", share);
   els.palette.addEventListener("click", () => {
     setPalette(state.paletteKey === "okabe" ? "neon" : "okabe", true);
