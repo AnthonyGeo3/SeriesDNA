@@ -9,6 +9,13 @@ export const CONFIG = {
   defaultRuntime: 45,
   guard: { maxEpisodes: 1500, minCoverage: 0.5 },
   defaultShows: { a: 15299, b: 67 }, // The Boys vs Grey's Anatomy
+  stats: {
+    goldenWindow: 5, // rated episodes
+    whiplash: [0.35, 0.6], // std dev: below = Consistent, between = Bumpy, above = Chaotic
+    dropWindowMin: 5,
+    dropWindowFrac: 0.05, // window = max(min, round(n * frac))
+    dropEdgeFrac: 0.05, // ignore dips in the first and last 5%
+  },
 };
 
 // Five bands, best first, matching CONFIG.thresholds. `ink` is the text
@@ -28,6 +35,26 @@ export const PALETTES = {
     noData: "#2a2f3a",
   },
 };
+
+// TVmaze show + episode list -> the normalised model (PLAN section 4).
+// Shared by the preset build script and live search.
+export function fromTvmaze(show, episodes) {
+  const fallbackRuntime = show.averageRuntime || show.runtime || CONFIG.defaultRuntime;
+  return {
+    id: show.id,
+    name: show.name,
+    year: show.premiered ? Number(show.premiered.slice(0, 4)) : null,
+    episodes: episodes
+      .filter((ep) => ep.number != null) // specials have no number
+      .map((ep) => ({
+        s: ep.season,
+        e: ep.number,
+        title: ep.name,
+        rating: ep.rating?.average ?? null,
+        runtime: ep.runtime || fallbackRuntime,
+      })),
+  };
+}
 
 // Raw preset/TVmaze-normalised show -> model with derived fields.
 export function prepareShow(raw) {
@@ -113,6 +140,12 @@ export function episodeAt(show, p, mode, maxMins) {
   return { idx: lo, ended: false };
 }
 
+// Inverse of episodeAt: scrubber position at the middle of episode idx.
+export function positionOf(show, idx, mode, maxMins) {
+  if (mode !== "hours") return (idx + 0.5) / show.n;
+  return (show.cumMinutes[idx] - show.episodes[idx].runtime / 2) / maxMins;
+}
+
 export function seasonAt(show, idx) {
   return show.episodes[idx].s;
 }
@@ -168,4 +201,59 @@ export function formatDelta(show, ep) {
 // Hours watched by the end of episode idx.
 export function hoursIn(show, idx) {
   return show.cumMinutes[idx] / 60;
+}
+
+// ---- Stats (PLAN section 5) ----------------------------------------------------
+
+// Highest/lowest mean over `size` consecutive rated episodes whose span lies in
+// [lo, hi]. Nulls are skipped, so a window can span an unrated episode.
+function extremeWindow(show, size, lo, hi, sign) {
+  const rated = [];
+  show.episodes.forEach((ep, i) => {
+    if (ep.rating != null && i >= lo && i <= hi) rated.push(i);
+  });
+  if (!rated.length || size < 1 || rated.length < size) return null;
+  let sum = 0;
+  let best = null;
+  for (let k = 0; k < rated.length; k++) {
+    sum += show.episodes[rated[k]].rating;
+    if (k >= size) sum -= show.episodes[rated[k - size]].rating;
+    if (k >= size - 1) {
+      const mean = sum / size;
+      // sign +1 finds the highest mean, -1 the lowest; earliest wins ties
+      // (the epsilon stops float noise from deciding them).
+      if (!best || sign * (mean - best.mean) > 1e-9) {
+        best = { start: rated[k - size + 1], end: rated[k], mean };
+      }
+    }
+  }
+  return best;
+}
+
+export function whiplashLabel(sd) {
+  const [calm, wild] = CONFIG.stats.whiplash;
+  return sd < calm ? "Consistent" : sd <= wild ? "Bumpy" : "Chaotic";
+}
+
+export function stats(show) {
+  const cfg = CONFIG.stats;
+  const golden = extremeWindow(show, Math.min(cfg.goldenWindow, show.rated), 0, show.n - 1, +1);
+
+  let sd = null;
+  if (show.rated) {
+    let acc = 0;
+    for (const ep of show.episodes) if (ep.rating != null) acc += (ep.rating - show.avg) ** 2;
+    sd = Math.sqrt(acc / show.rated);
+  }
+
+  const edge = Math.floor(show.n * cfg.dropEdgeFrac);
+  const dropSize = Math.max(cfg.dropWindowMin, Math.round(show.n * cfg.dropWindowFrac));
+  const drop = extremeWindow(show, dropSize, edge, show.n - 1 - edge, -1);
+  if (drop) drop.at = ((drop.start + drop.end + 1) / 2 / show.n) * 100; // % of lifespan
+
+  return {
+    golden,
+    whiplash: sd == null ? null : { sd, label: whiplashLabel(sd) },
+    drop,
+  };
 }

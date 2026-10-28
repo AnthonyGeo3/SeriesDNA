@@ -1,21 +1,32 @@
 // UI wiring: state, events, cards. Pure logic lives in core.js, drawing in render.js.
 import {
-  CONFIG, PALETTES, prepareShow, maxMinutes, layout, episodeAt, seasonAt,
-  bandIndex, episodeCode, formatDelta, hoursIn,
+  CONFIG, PALETTES, fromTvmaze, prepareShow, hasEnoughData, maxMinutes, layout,
+  episodeAt, positionOf, seasonAt, bandIndex, episodeCode, formatDelta, hoursIn, stats,
 } from "./core.js";
 import { drawStrip, drawTicks } from "./render.js";
 
+const API = "https://api.tvmaze.com";
 const SLOTS = ["a", "b"];
+const TWEEN_MS = 500;
+const SEARCH_DEBOUNCE_MS = 300;
+const FLIP_MIN_GAP_MS = 150;
+const CACHE_PREFIX = "sdna:v1:show:";
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const widePanel = matchMedia("(min-width: 1000px)");
 
 const state = {
+  presets: {},
   shows: { a: null, b: null },
+  stats: { a: null, b: null },
   p: 0, // scrubber position in [0,1] of the bar width
   mode: "pct",
+  widthFrac: { a: 1, b: 1 }, // drawn strip widths (tweened)
   palette: PALETTES.neon,
   shown: { a: null, b: null }, // what each card currently shows
   season: { a: null, b: null }, // for haptics on season boundaries
+  loading: { a: 0, b: 0 }, // request token per slot, so stale loads are dropped
 };
 
 const els = {
@@ -25,8 +36,27 @@ const els = {
   scrub: $("#scrub"),
   status: $("#status"),
   rotate: $("#rotate"),
+  searchInput: $("#search-input"),
+  searchResults: $("#search-results"),
+  stats: $("#stats"),
+  statsBody: $("#stats-body"),
+  statsOpen: $("#stats-open"),
+  statsBackdrop: $("#stats-backdrop"),
+  toast: $("#toast"),
 };
 let trackWidth = 0;
+let theme = null;
+
+// Tiny DOM builder; text always goes in via textContent, never as HTML.
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v != null) el.setAttribute(k, v);
+  }
+  el.append(...children.filter((c) => c != null));
+  return el;
+}
 
 function applyPalette(palette) {
   const root = document.documentElement.style;
@@ -35,48 +65,100 @@ function applyPalette(palette) {
   root.setProperty("--nodata", palette.noData);
 }
 
+function readTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return {
+    tick: v("--tick"),
+    label: v("--muted"),
+    font: v("--font"),
+    markerLine: v("--marker-line"),
+    pillBg: v("--pill-bg"),
+    pillInk: v("--pill-ink"),
+  };
+}
+
+let toastTimer = 0;
+function toast(message) {
+  els.toast.textContent = message;
+  els.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (els.toast.hidden = true), 4000);
+}
+
 // ---- Strips ----------------------------------------------------------------
 
-function drawAll() {
-  const shows = SLOTS.map((s) => state.shows[s]);
-  const max = maxMinutes(shows);
-  const css = getComputedStyle(document.documentElement);
-  const theme = {
-    tick: css.getPropertyValue("--tick").trim(),
-    label: css.getPropertyValue("--muted").trim(),
-    font: css.getPropertyValue("--font").trim(),
-  };
+function markersFor(slot) {
+  const st = state.stats[slot];
+  const out = [];
+  if (st?.golden) out.push({ ...st.golden, label: "★ Golden era" });
+  if (st?.drop) out.push({ ...st.drop, label: "Drop-off", dashed: true });
+  return out;
+}
+
+function drawStrips() {
   for (const slot of SLOTS) {
     const show = state.shows[slot];
-    const { widthFrac } = layout(show, state.mode, max);
-    const opts = { palette: state.palette, mode: state.mode, widthFrac };
-    drawStrip($(`.strip[data-slot="${slot}"]`), show, opts);
+    const opts = { palette: state.palette, mode: state.mode, widthFrac: state.widthFrac[slot] };
+    drawStrip($(`.strip[data-slot="${slot}"]`), show, { ...opts, markers: markersFor(slot), theme });
     drawTicks($(`.ticks[data-slot="${slot}"]`), show, { ...opts, ...theme });
   }
+}
+
+function drawAll() {
+  drawStrips();
   trackWidth = els.track.getBoundingClientRect().width;
   moveLaser();
+}
+
+function targetWidths() {
+  const max = maxMinutes(SLOTS.map((s) => state.shows[s]));
+  return Object.fromEntries(SLOTS.map((s) => [s, layout(state.shows[s], state.mode, max).widthFrac]));
+}
+
+// Tween strip widths to their targets (mode toggle, or a new show changing
+// the longest runtime), redrawing each frame.
+let tweenFrame = 0;
+function animateWidths() {
+  cancelAnimationFrame(tweenFrame);
+  const to = targetWidths();
+  const from = { ...state.widthFrac };
+  if (reducedMotion.matches) {
+    state.widthFrac = to;
+    drawStrips();
+    return;
+  }
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / TWEEN_MS);
+    const k = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; // ease-in-out
+    for (const s of SLOTS) state.widthFrac[s] = t === 1 ? to[s] : from[s] + (to[s] - from[s]) * k;
+    drawStrips();
+    if (t < 1) tweenFrame = requestAnimationFrame(step);
+  };
+  tweenFrame = requestAnimationFrame(step);
 }
 
 function renderLabels() {
   for (const slot of SLOTS) {
     const show = state.shows[slot];
-    const pct = Math.round(show.coverage * 100);
     $(`.slot[data-slot="${slot}"] .slot-name`).textContent = show.name;
     const name = $(`.label[data-slot="${slot}"] .label-name`);
     name.textContent = show.name;
-    name.title = `${show.name} (${show.year})`;
-    $(`.label[data-slot="${slot}"] .coverage`).textContent = `${pct}% rated`;
+    name.title = show.year ? `${show.name} (${show.year})` : show.name;
+    $(`.label[data-slot="${slot}"] .coverage`).textContent = `${Math.round(show.coverage * 100)}% rated`;
+    $(`.label[data-slot="${slot}"] .label-hours`).textContent = `${Math.round(show.totalMinutes / 60)} hrs`;
     $(`.strip[data-slot="${slot}"]`).setAttribute(
       "aria-label",
       `${show.name}: ${show.n} episodes across ${show.seasons.length} seasons, average rating ${show.avg.toFixed(1)}`
     );
+    cards[slot].show.textContent = show.name;
   }
 }
 
 // ---- Cards -----------------------------------------------------------------
 
 const cards = {};
-const FLIP_MIN_GAP_MS = 150;
 
 function buildCards() {
   for (const slot of SLOTS) {
@@ -104,7 +186,6 @@ function buildCards() {
       anim: null,
       lastChange: -Infinity,
     };
-    cards[slot].show.textContent = state.shows[slot].name;
   }
 }
 
@@ -149,6 +230,10 @@ let userDriven = false;
 function setP(p, fromUser) {
   state.p = Math.min(1, Math.max(0, p));
   userDriven ||= fromUser;
+  queueFrame();
+}
+
+function queueFrame() {
   if (!frameQueued) {
     frameQueued = true;
     requestAnimationFrame(frame);
@@ -181,7 +266,7 @@ function frame() {
     if (state.season[slot] != null && season !== state.season[slot]) crossedSeason = true;
     state.season[slot] = season;
     const ep = show.episodes[idx];
-    spoken.push(`${show.name} ${episodeCode(ep)}, ${ep.rating != null ? ep.rating.toFixed(1) : "no rating"}`);
+    spoken.push(`${show.name} ${ended ? "ended" : episodeCode(ep)}, ${ep.rating != null ? ep.rating.toFixed(1) : "no rating"}`);
   }
   els.scrub.setAttribute("aria-valuetext", spoken.join("; "));
 
@@ -206,6 +291,254 @@ function bindScrubbing() {
   els.track.addEventListener("pointerup", end);
   els.track.addEventListener("pointercancel", end);
   els.scrub.addEventListener("input", () => setP(els.scrub.value / 1000, true));
+}
+
+// ---- Mode toggle (% Lifespan <-> Hours) -------------------------------------------
+
+function setMode(mode) {
+  if (mode === state.mode) return;
+  state.mode = mode;
+  for (const b of document.querySelectorAll(".mode button")) b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  animateWidths();
+  queueFrame();
+}
+
+function bindMode() {
+  for (const b of document.querySelectorAll(".mode button")) b.addEventListener("click", () => setMode(b.dataset.mode));
+}
+
+// ---- Loading shows ---------------------------------------------------------------
+
+function cacheGet(id) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + id);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cacheSet(show) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + show.id, JSON.stringify(show));
+  } catch {
+    // Private mode or full storage: the show just won't be cached.
+  }
+}
+
+async function fetchShow(id) {
+  const res = await fetch(`${API}/shows/${id}?embed=episodes`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return fromTvmaze(json, json._embedded?.episodes ?? []);
+}
+
+async function loadIntoSlot(slot, { id, name }) {
+  const token = ++state.loading[slot];
+  const skeleton = $(`.skeleton[data-slot="${slot}"]`);
+  let raw = state.presets[id] ?? cacheGet(id);
+  if (!raw) {
+    skeleton.hidden = false;
+    try {
+      raw = await fetchShow(id);
+    } catch {
+      if (token === state.loading[slot]) {
+        skeleton.hidden = true;
+        toast(navigator.onLine === false
+          ? "You're offline. The presets still work."
+          : "Couldn't reach TVmaze. Check your connection; the presets still work.");
+      }
+      return;
+    }
+    if (token !== state.loading[slot]) return; // a newer pick replaced this one
+    skeleton.hidden = true;
+  }
+  const show = prepareShow(raw);
+  if (!hasEnoughData(show)) {
+    toast(`Not enough rating data to build a DNA strip for ${name}.`);
+    return;
+  }
+  if (!state.presets[id]) cacheSet(raw);
+  state.shows[slot] = show;
+  state.stats[slot] = stats(show);
+  state.shown[slot] = null;
+  state.season[slot] = null;
+  renderLabels();
+  renderStats();
+  animateWidths(); // the longest runtime may have changed (hours mode)
+  drawStrips();
+  queueFrame();
+}
+
+// ---- Search ----------------------------------------------------------------------
+
+let searchTimer = 0;
+let searchController = null;
+
+function presetMatches(q) {
+  const needle = q.toLowerCase();
+  return Object.values(state.presets)
+    .filter((s) => s.name.toLowerCase().includes(needle))
+    .map((s) => ({ id: s.id, name: s.name, year: s.year }));
+}
+
+function resultRow(entry) {
+  const pick = (slot) => () => {
+    closeSearch();
+    els.searchInput.value = "";
+    els.searchInput.blur();
+    loadIntoSlot(slot, entry);
+  };
+  const slotButton = (slot) =>
+    h("button", {
+      type: "button",
+      onclick: pick(slot),
+      "aria-label": `Put ${entry.name} in slot ${slot.toUpperCase()}, replacing ${state.shows[slot].name}`,
+      title: `Replace ${state.shows[slot].name}`,
+    }, `→ ${slot.toUpperCase()}`);
+  return h("div", { class: "result" },
+    h("span", { class: "result-name" }, entry.name, entry.year ? h("span", { class: "result-year" }, String(entry.year)) : null),
+    slotButton("a"),
+    slotButton("b"));
+}
+
+// live: undefined = not searched, "loading", "error", or an array of results.
+function renderResults(q, live) {
+  const box = els.searchResults;
+  box.replaceChildren();
+  const presets = presetMatches(q);
+  if (presets.length) {
+    box.append(h("div", { class: "results-head" }, q ? "Presets" : "Presets (work offline)"));
+    for (const p of presets) box.append(resultRow(p));
+  }
+  if (q.length >= 2) {
+    box.append(h("div", { class: "results-head" }, "TVmaze"));
+    if (live === "loading") box.append(h("div", { class: "results-note" }, "Searching…"));
+    else if (live === "error") box.append(h("div", { class: "results-note" }, "Couldn't reach TVmaze. The presets still work."));
+    else if (Array.isArray(live)) {
+      const fresh = live.filter((r) => !state.presets[r.id]);
+      if (!fresh.length && !presets.length) box.append(h("div", { class: "results-note" }, `No shows found for “${q}”.`));
+      for (const r of fresh) box.append(resultRow(r));
+    }
+  }
+  openSearch();
+}
+
+async function searchLive(q) {
+  searchController?.abort();
+  searchController = new AbortController();
+  try {
+    const res = await fetch(`${API}/search/shows?q=${encodeURIComponent(q)}`, { signal: searchController.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const live = json.slice(0, 5).map(({ show }) => ({
+      id: show.id,
+      name: show.name,
+      year: show.premiered ? Number(show.premiered.slice(0, 4)) : null,
+    }));
+    if (els.searchInput.value.trim() === q) renderResults(q, live);
+  } catch (err) {
+    if (err.name !== "AbortError" && els.searchInput.value.trim() === q) renderResults(q, "error");
+  }
+}
+
+function openSearch() {
+  els.searchResults.hidden = false;
+  els.searchInput.setAttribute("aria-expanded", "true");
+}
+
+function closeSearch() {
+  clearTimeout(searchTimer);
+  searchController?.abort();
+  els.searchResults.hidden = true;
+  els.searchInput.setAttribute("aria-expanded", "false");
+}
+
+function bindSearch() {
+  els.searchInput.addEventListener("input", () => {
+    const q = els.searchInput.value.trim();
+    clearTimeout(searchTimer);
+    searchController?.abort();
+    if (q.length < 2) {
+      renderResults(q);
+      return;
+    }
+    renderResults(q, "loading");
+    searchTimer = setTimeout(() => searchLive(q), SEARCH_DEBOUNCE_MS);
+  });
+  els.searchInput.addEventListener("focus", () => {
+    if (!els.searchInput.value.trim()) renderResults("");
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (!$("#search").contains(e.target)) closeSearch();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!els.searchResults.hidden) {
+      closeSearch();
+      els.searchInput.blur();
+    } else if (!els.stats.hidden) toggleStats(false);
+  });
+}
+
+// ---- Stats sheet -----------------------------------------------------------------
+
+function jumpTo(slot, start, end) {
+  const show = state.shows[slot];
+  const max = maxMinutes(SLOTS.map((s) => state.shows[s]));
+  setP(positionOf(show, Math.round((start + end) / 2), state.mode, max), true);
+  if (!widePanel.matches) toggleStats(false); // the drawer covers the cards on phones
+}
+
+function statButton(slot, name, range, value, note) {
+  return h("button", { type: "button", class: "stat", onclick: () => jumpTo(slot, range.start, range.end), title: "Jump the laser here" },
+    h("span", { class: "stat-name" }, name),
+    h("span", { class: "stat-value" }, value),
+    h("span", { class: "stat-note" }, note));
+}
+
+function renderStats() {
+  if (els.stats.hidden) return;
+  els.statsBody.replaceChildren();
+  for (const slot of SLOTS) {
+    const show = state.shows[slot];
+    const st = state.stats[slot];
+    const code = (i) => episodeCode(show.episodes[i]);
+    const count = (r) => `${r.end - r.start + 1} episodes`;
+    const section = h("section", { class: "stats-show" },
+      h("h3", {}, show.name, h("small", {}, `${show.n} eps · ${Math.round(show.totalMinutes / 60)} hrs · avg ${show.avg.toFixed(1)}`)));
+    if (st.golden) {
+      section.append(statButton(slot, "Golden Era", st.golden,
+        `${code(st.golden.start)} – ${code(st.golden.end)}`,
+        `★ ${st.golden.mean.toFixed(1)} average over ${count(st.golden)}`));
+    }
+    if (st.whiplash) {
+      section.append(h("div", { class: "stat" },
+        h("span", { class: "stat-name" }, "Whiplash"),
+        h("span", { class: "stat-value" }, st.whiplash.label),
+        h("span", { class: "stat-note" }, `ratings swing ±${st.whiplash.sd.toFixed(2)} (std dev)`)));
+    }
+    if (st.drop) {
+      section.append(statButton(slot, "Drop-Off", st.drop,
+        `${Math.round(st.drop.at)}% in · ${code(st.drop.start)} – ${code(st.drop.end)}`,
+        `★ ${st.drop.mean.toFixed(1)} average over ${count(st.drop)}`));
+    }
+    els.statsBody.append(section);
+  }
+}
+
+function toggleStats(open = els.stats.hidden) {
+  els.stats.hidden = !open;
+  els.statsBackdrop.hidden = !open;
+  els.statsOpen.setAttribute("aria-expanded", String(open));
+  document.body.classList.toggle("stats-open", open);
+  if (open) renderStats();
+}
+
+function bindStats() {
+  els.statsOpen.addEventListener("click", () => toggleStats());
+  $("#stats-close").addEventListener("click", () => toggleStats(false));
+  els.statsBackdrop.addEventListener("click", () => toggleStats(false));
 }
 
 // ---- Resize ------------------------------------------------------------------
@@ -255,22 +588,29 @@ function bindRotatePrompt() {
 
 async function init() {
   applyPalette(state.palette);
+  theme = readTheme();
   bindRotatePrompt();
-  let presets;
   try {
     const res = await fetch("data/presets.json");
     if (!res.ok) throw new Error(res.status);
-    presets = await res.json();
+    state.presets = await res.json();
   } catch {
     if (location.protocol !== "file:") els.status.textContent = "Couldn't load the show data. Try reloading.";
     return;
   }
-  for (const slot of SLOTS) state.shows[slot] = prepareShow(presets[CONFIG.defaultShows[slot]]);
+  buildCards();
+  for (const slot of SLOTS) {
+    state.shows[slot] = prepareShow(state.presets[CONFIG.defaultShows[slot]]);
+    state.stats[slot] = stats(state.shows[slot]);
+  }
+  state.widthFrac = targetWidths();
   els.status.textContent = "";
   renderLabels();
-  buildCards();
   drawAll();
   bindScrubbing();
+  bindMode();
+  bindSearch();
+  bindStats();
   bindResize();
   setP(0, false);
 }

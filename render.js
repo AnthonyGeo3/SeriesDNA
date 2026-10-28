@@ -14,7 +14,7 @@ export function fitCanvas(canvas) {
   return { w, h, dpr };
 }
 
-export function drawStrip(canvas, show, { palette, mode = "pct", widthFrac = 1 }) {
+export function drawStrip(canvas, show, { palette, mode = "pct", widthFrac = 1, markers = [], theme }) {
   const { w, h, dpr } = fitCanvas(canvas);
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, w, h);
@@ -26,6 +26,41 @@ export function drawStrip(canvas, show, { palette, mode = "pct", widthFrac = 1 }
     const colour = ratingToBand(seg.rating, palette);
     if (colour !== fill) ctx.fillStyle = fill = colour;
     ctx.fillRect(seg.x, 0, Math.max(1, seg.w - gap), h);
+  }
+  drawMarkers(ctx, show, { mode, drawW, h, dpr, markers, theme });
+}
+
+// Golden Era / Drop-Off: an outline round the episode range plus a small
+// label pill pinned to its start (kept inside the strip).
+function drawMarkers(ctx, show, { mode, drawW, h, dpr, markers, theme }) {
+  // Skip on strips too short or narrow (hours mode) to carry the pills.
+  if (!markers.length || h < 24 * dpr || drawW < 160 * dpr) return;
+  const starts = mode === "hours" ? show.startsHours : show.startsPct;
+  const line = Math.max(1, Math.round(1.5 * dpr));
+  ctx.font = `700 ${Math.round(10 * dpr)}px ${theme.font}`;
+  ctx.textBaseline = "middle";
+  for (const { start, end, label, dashed } of markers) {
+    const x0 = Math.round(starts[start] * drawW);
+    const x1 = Math.max(x0 + line * 2, Math.round(starts[end + 1] * drawW));
+    ctx.save();
+    ctx.strokeStyle = theme.markerLine;
+    ctx.lineWidth = line;
+    ctx.setLineDash(dashed ? [3 * dpr, 2 * dpr] : []);
+    ctx.strokeRect(x0 + line / 2, line / 2, x1 - x0 - line, h - line);
+    ctx.restore();
+
+    const padX = 5 * dpr;
+    const pillH = Math.round(15 * dpr);
+    const pillW = Math.ceil(ctx.measureText(label).width + padX * 2);
+    // Inside the drawn strip; Drop-Off sits at the bottom so the two never collide.
+    const px = Math.max(0, Math.min(x0, drawW - pillW));
+    const py = dashed ? h - pillH - Math.round(3 * dpr) : Math.round(3 * dpr);
+    ctx.fillStyle = theme.pillBg;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(px, py, pillW, pillH, pillH / 2) : ctx.rect(px, py, pillW, pillH);
+    ctx.fill();
+    ctx.fillStyle = theme.pillInk;
+    ctx.fillText(label, px + padX, py + pillH / 2 + dpr / 2);
   }
 }
 

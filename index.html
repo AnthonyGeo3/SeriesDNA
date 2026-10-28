@@ -18,31 +18,55 @@
         <span class="vs">vs</span>
         <span class="slot" data-slot="b"><b>B</b> <span class="slot-name"></span></span>
       </p>
+      <div class="search" id="search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="search" id="search-input" placeholder="Search any show…" autocomplete="off" spellcheck="false"
+               aria-expanded="false" aria-controls="search-results" aria-label="Search for a TV show">
+        <div class="search-results" id="search-results" hidden></div>
+      </div>
+      <button type="button" class="btn-pill" id="stats-open" aria-expanded="false" aria-controls="stats">Stats</button>
     </header>
 
     <main class="stage">
       <section class="strips" id="strips" aria-label="Episode rating barcodes">
-        <div class="label" data-slot="a"><span class="label-name"></span><span class="chip coverage"></span></div>
+        <div class="label" data-slot="a"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
         <canvas class="strip" data-slot="a" role="img"></canvas>
+        <div class="skeleton" data-slot="a" hidden></div>
         <canvas class="ticks" data-slot="a" aria-hidden="true"></canvas>
-        <div class="label" data-slot="b"><span class="label-name"></span><span class="chip coverage"></span></div>
+        <div class="label" data-slot="b"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
         <canvas class="strip" data-slot="b" role="img"></canvas>
+        <div class="skeleton" data-slot="b" hidden></div>
         <canvas class="ticks" data-slot="b" aria-hidden="true"></canvas>
         <div class="track" id="track"><div class="laser" id="laser"></div></div>
       </section>
-  
+
       <section class="controls">
+        <div class="mode" role="group" aria-label="Strip scale">
+          <button type="button" data-mode="pct" aria-pressed="true" title="Every show stretched to the same width"><span class="wide">% </span>Lifespan</button>
+          <button type="button" data-mode="hours" aria-pressed="false" title="Width by total running time">Hours</button>
+        </div>
         <input type="range" class="scrub" id="scrub" min="0" max="1000" value="0" aria-label="Scrub through both shows">
       </section>
-  
+
       <section class="cards">
         <article class="card" data-slot="a"></article>
         <article class="card" data-slot="b"></article>
-    </section>
+      </section>
     </main>
 
     <p class="status" id="status" role="status">Loading…</p>
   </div>
+
+  <div class="sheet-backdrop" id="stats-backdrop" hidden></div>
+  <aside class="sheet" id="stats" aria-label="Stats" hidden>
+    <div class="sheet-head">
+      <h2>Stats</h2>
+      <button type="button" class="btn-icon" id="stats-close" aria-label="Close stats">✕</button>
+    </div>
+    <div class="sheet-body" id="stats-body"></div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <div class="rotate" id="rotate" hidden>
     <svg class="rotate-phone" viewBox="0 0 64 64" aria-hidden="true">

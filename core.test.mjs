@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   prepareShow, bandIndex, ratingToBand, PALETTES, layout, episodeAt, maxMinutes,
-  segments, episodeCode, formatDelta, hoursIn, hasEnoughData,
+  segments, episodeCode, formatDelta, hoursIn, hasEnoughData, stats, whiplashLabel,
+  positionOf, fromTvmaze,
 } from "./core.js";
 
 const mk = (eps) => prepareShow({ id: 1, name: "T", year: 2000, episodes: eps });
@@ -67,4 +68,52 @@ test("card formatting", () => {
 test("every preset passes the data guard", () => {
   const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
   for (const raw of Object.values(presets)) assert.ok(hasEnoughData(prepareShow(raw)), raw.name);
+});
+
+test("positionOf is the inverse of episodeAt", () => {
+  const max = 270;
+  for (const mode of ["pct", "hours"]) {
+    for (let i = 0; i < toy.n; i++) assert.equal(episodeAt(toy, positionOf(toy, i, mode, max), mode, max).idx, i);
+  }
+});
+
+test("fromTvmaze keeps numbered episodes and falls back on runtime", () => {
+  const show = fromTvmaze({ id: 9, name: "X", premiered: "2021-02-03", averageRuntime: 50 }, [
+    { season: 1, number: 1, name: "Pilot", rating: { average: 8.1 }, runtime: null },
+    { season: 1, number: null, name: "Special", rating: { average: 9 }, runtime: 30 },
+    { season: 1, number: 2, name: "Two", rating: { average: null }, runtime: 42 },
+  ]);
+  assert.deepEqual(show, {
+    id: 9, name: "X", year: 2021,
+    episodes: [
+      { s: 1, e: 1, title: "Pilot", rating: 8.1, runtime: 50 },
+      { s: 1, e: 2, title: "Two", rating: null, runtime: 42 },
+    ],
+  });
+});
+
+test("stats: golden era, whiplash and drop-off", () => {
+  // 40 episodes at 8, a peak at 10-14, a dip at 25-29, and a low finale
+  // that the edge rule must ignore.
+  const ratings = Array.from({ length: 40 }, (_, i) =>
+    i >= 10 && i <= 14 ? 9.5 : i >= 25 && i <= 29 ? 6.5 : i === 39 ? 3 : 8);
+  ratings[12] = null; // a null inside the golden window is skipped
+  const show = mk(ratings.map((rating, i) => ({ s: 1 + Math.floor(i / 10), e: (i % 10) + 1, rating, runtime: 30 })));
+  const st = stats(show);
+  // With 12 unrated, windows 9-14 and 10-15 tie on mean; the earliest wins.
+  assert.deepEqual([st.golden.start, st.golden.end], [9, 14]);
+  assert.equal(st.drop.start, 25);
+  assert.equal(st.drop.end, 29);
+  assert.ok(Math.abs(st.drop.mean - 6.5) < 1e-9);
+  assert.equal(st.drop.at, 68.75);
+  assert.equal(st.whiplash.label, "Chaotic");
+  assert.deepEqual([0.2, 0.35, 0.6, 0.61].map(whiplashLabel), ["Consistent", "Bumpy", "Bumpy", "Chaotic"]);
+});
+
+test("stats cope with tiny and unrated shows", () => {
+  const two = stats(mk([{ s: 1, e: 1, rating: 8, runtime: 30 }, { s: 1, e: 2, rating: 9, runtime: 30 }]));
+  assert.deepEqual([two.golden.start, two.golden.end], [0, 1]);
+  assert.equal(two.drop, null);
+  const none = stats(mk([{ s: 1, e: 1, rating: null, runtime: 30 }]));
+  assert.deepEqual(none, { golden: null, whiplash: null, drop: null });
 });

@@ -1,16 +1,16 @@
 // Shared helpers for the Phase 0 scripts (Node 18+, global fetch).
+import { CONFIG, fromTvmaze } from "../core.js";
 
 export const API = "https://api.tvmaze.com";
 
-// Guards from PLAN.md section 2.
-export const GUARD = { maxEpisodes: 1500, minCoverage: 0.5 };
+// Guards from PLAN.md section 2, shared with the app.
+export const GUARD = CONFIG.guard;
 // Audit flags: a preset should be well covered and have a usable spread.
 export const AUDIT = { minCoverage: 0.85, minRange: 1.0 };
 
 // Preset shows. `year` is the premiere year and always disambiguates the
-// search (UK vs US Office, reboots). `id` is optional: when given, it must
-// match the search result with that name and year, or the build fails.
-// After a successful build, copy the printed ids in here to lock them down.
+// search (UK vs US Office, reboots). `id` pins the expected TVmaze id: if
+// the name + year match lands anywhere else, the build fails.
 export const PRESETS = [
   { name: "The Boys", year: 2019, id: 15299 },
   { name: "Grey's Anatomy", year: 2005, id: 67 },
@@ -78,22 +78,7 @@ export async function resolveShow(preset, log = console.log) {
 // Normalised model from PLAN.md section 4 (derived fields are computed on
 // load in core.js, so they are not stored).
 export async function fetchShow(show) {
-  const raw = await getJSON(`/shows/${show.id}/episodes`);
-  const fallbackRuntime = show.averageRuntime || show.runtime || 45;
-  return {
-    id: show.id,
-    name: show.name,
-    year: premiereYear(show),
-    episodes: raw
-      .filter((ep) => ep.number != null) // belt and braces: specials have no number
-      .map((ep) => ({
-        s: ep.season,
-        e: ep.number,
-        title: ep.name,
-        rating: ep.rating?.average ?? null,
-        runtime: ep.runtime || fallbackRuntime,
-      })),
-  };
+  return fromTvmaze(show, await getJSON(`/shows/${show.id}/episodes`));
 }
 
 export function summarise(show) {
