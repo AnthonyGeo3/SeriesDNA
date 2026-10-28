@@ -14,7 +14,6 @@ export const CONFIG = {
   steps: 10000,
   game: {
     minSeasonRated: 3, // seasons with fewer rated episodes aren't asked about
-    showChance: 0.35, // chance a card is a whole show rather than one season
     startGap: 0.5, // early pairs differ by at least this much...
     gapStep: 0.04, // ...shrinking by this per point scored...
     minGap: 0.1, // ...down to this
@@ -327,25 +326,28 @@ export function gameGap(score) {
   return Math.max(g.minGap, g.startGap - g.gapStep * score);
 }
 
-// Next card to compare with `current`: a random show, then its whole-show
-// average or one of its seasons, at least gameGap(score) away from current.
-// `pool` is one gameItems() array per show.
-export function pickNext(pool, current, score, rng = Math.random) {
-  const shows = pool.filter((items) => items.length);
+// Next card to compare with `current`, of one kind ("show" for whole-show
+// averages, "season" for single seasons): a random show, then for seasons one
+// of its seasons (so long-runners don't crowd the rest out). It must be at
+// least gameGap(score) away from current and not among `avoid` (recently
+// seen). `pool` is one gameItems() array per show.
+export function pickNext(pool, current, score, { kind = "show", avoid = [], rng = Math.random } = {}) {
+  const shows = pool.map((items) => items.filter((it) => it.kind === kind)).filter((items) => items.length);
+  const skip = new Set(avoid);
+  if (current) skip.add(current.key);
   const gap = gameGap(score);
   let fallback = null;
   for (let tries = 0; tries < 300; tries++) {
     const items = shows[Math.floor(rng() * shows.length)];
-    const pick = items.length === 1 || rng() < CONFIG.game.showChance
-      ? items[0]
-      : items[1 + Math.floor(rng() * (items.length - 1))];
+    const pick = items[Math.floor(rng() * items.length)];
+    if (skip.has(pick.key)) continue;
     if (!current) return pick;
-    if (pick.key === current.key) continue;
     const d = Math.abs(pick.rating - current.rating);
     if (d >= gap - 1e-9) return pick;
-    if (d > 0 && (!fallback || d > Math.abs(fallback.rating - current.rating))) fallback = pick;
+    if (!fallback || d > Math.abs(fallback.rating - current.rating)) fallback = pick;
   }
-  return fallback ?? shows.flat().find((it) => it.key !== current.key) ?? current;
+  // Small pools: the widest gap found, else anything but the current card.
+  return fallback ?? shows.flat().find((it) => it.key !== current?.key) ?? current;
 }
 
 // A tie counts as correct either way.

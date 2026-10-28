@@ -161,9 +161,10 @@ test("game: gap shrinks with score; picks respect it; ties count", () => {
   const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
   const pool = Object.values(presets).map((raw) => gameItems(prepareShow(raw)));
   const rng = seeded(42);
-  let current = pickNext(pool, null, 0, rng);
+  let current = pickNext(pool, null, 0, { kind: "season", rng });
   for (let score = 0; score < 40; score++) {
-    const next = pickNext(pool, current, score, rng);
+    const next = pickNext(pool, current, score, { kind: "season", rng });
+    assert.equal(next.kind, "season");
     assert.notEqual(next.key, current.key);
     assert.ok(Math.abs(next.rating - current.rating) >= gameGap(score) - 1e-9, `score ${score}`);
     current = next;
@@ -172,4 +173,20 @@ test("game: gap shrinks with score; picks respect it; ties count", () => {
   assert.equal(judge(a, b, "higher"), true);
   assert.equal(judge(a, b, "lower"), false);
   assert.equal(judge(a, { rating: 8.2 }, "lower"), true);
+});
+
+test("game: show mode uses whole shows only and avoids recent cards", () => {
+  const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
+  const pool = Object.values(presets).map((raw) => gameItems(prepareShow(raw)));
+  const rng = seeded(7);
+  const recent = [];
+  let current = pickNext(pool, null, 0, { rng });
+  for (let score = 0; score < 60; score++) {
+    recent.push(current.key);
+    const avoid = recent.slice(-5);
+    const next = pickNext(pool, current, score, { avoid, rng });
+    assert.equal(next.kind, "show");
+    assert.ok(!avoid.includes(next.key), `repeat at ${score}`);
+    current = next;
+  }
 });

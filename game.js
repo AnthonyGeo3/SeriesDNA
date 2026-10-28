@@ -3,28 +3,31 @@ import { prepareShow, gameItems, pickNext, judge, bandIndex } from "./core.js";
 import { drawStrip } from "./render.js";
 import { h } from "./dom.js";
 
-const BEST_KEY = "sdna:v1:hilo-best";
+const BEST_PREFIX = "sdna:v1:hilo-best:"; // + "show" | "season"
+const MODE_KEY = "sdna:v1:hilo-mode";
 const REVEAL_MS = 650;
 const NEXT_ROUND_MS = 900;
 
 const $ = (sel) => document.querySelector(sel);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function loadBest() {
+function load(key) {
   try {
-    return Number(localStorage.getItem(BEST_KEY)) || 0;
+    return localStorage.getItem(key);
   } catch {
-    return 0;
+    return null;
   }
 }
 
-function saveBest(best) {
+function save(key, value) {
   try {
-    localStorage.setItem(BEST_KEY, String(best));
+    localStorage.setItem(key, String(value));
   } catch {
     // Not persisted in private mode; the game still works.
   }
 }
+
+const loadBest = (mode) => Number(load(BEST_PREFIX + mode)) || 0;
 
 // getShows: raw shows to play with. getStyle: { palette, theme } for strips.
 export function createGame({ getShows, getStyle, reducedMotion }) {
@@ -39,13 +42,16 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
     higher: $("#game-higher"),
     lower: $("#game-lower"),
     again: $("#game-again"),
+    modes: document.querySelectorAll("#game-modes button"),
   };
   let shows = new Map(); // showId -> prepared show
   let pool = [];
   let left = null;
   let right = null;
+  let mode = load(MODE_KEY) === "season" ? "season" : "show"; // which cards: whole shows or seasons
+  let recent = []; // keys seen lately, so cards don't come straight back
   let score = 0;
-  let best = loadBest();
+  let best = loadBest(mode);
   let bestAtStart = best;
   let phase = "idle"; // guess | reveal | over
   let round = 0; // bumps on every new game/close so stale timers bail out
@@ -93,15 +99,29 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
     els.higher.disabled = els.lower.disabled = false;
   }
 
+  function next() {
+    recent.push(left.key);
+    const size = pool.reduce((n, items) => n + items.filter((it) => it.kind === mode).length, 0);
+    const avoid = recent.slice(-Math.max(0, Math.min(8, size - 2)));
+    return pickNext(pool, left, score, { kind: mode, avoid });
+  }
+
+  function syncModes() {
+    for (const b of els.modes) b.setAttribute("aria-pressed", String(b.dataset.kind === mode));
+  }
+
   function start() {
     round++;
     const raws = getShows();
     shows = new Map(raws.map((raw) => [raw.id, prepareShow(raw)]));
     pool = [...shows.values()].map(gameItems);
+    syncModes();
     score = 0;
+    best = loadBest(mode);
     bestAtStart = best;
-    left = pickNext(pool, null, 0);
-    right = pickNext(pool, left, 0);
+    recent = [];
+    left = pickNext(pool, null, 0, { kind: mode });
+    right = next();
     phase = "guess";
     setScore();
     renderCard(els.left, left, left.rating);
@@ -151,7 +171,7 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
       const firstNewBest = score === bestAtStart + 1 && bestAtStart > 0;
       if (score > best) {
         best = score;
-        saveBest(best);
+        save(BEST_PREFIX + mode, best);
       }
       setScore();
       els.msg.textContent = tie ? "Same rating, so that counts. ✓" : `Correct! ✓${firstNewBest ? " New best!" : ""}`;
@@ -160,7 +180,7 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
       if (myRound !== round) return;
       els.right.classList.remove("pop");
       left = right;
-      right = pickNext(pool, left, score);
+      right = next();
       renderCard(els.left, left, left.rating);
       renderCard(els.right, right, null);
       phase = "guess";
@@ -194,6 +214,14 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
   els.higher.addEventListener("click", () => guess("higher"));
   els.lower.addEventListener("click", () => guess("lower"));
   els.again.addEventListener("click", start);
+  for (const b of els.modes) {
+    b.addEventListener("click", () => {
+      if (b.dataset.kind === mode && phase !== "over") return;
+      mode = b.dataset.kind;
+      save(MODE_KEY, mode);
+      start();
+    });
+  }
   $("#game-close").addEventListener("click", close);
   document.addEventListener("keydown", (e) => {
     if (els.root.hidden) return;
