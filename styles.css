@@ -57,6 +57,36 @@ body {
 .stage > * { flex: none; }
 .stage > .strips { flex: 0 1 auto; }
 
+/* Colour key + verdict, one line above the strips */
+.info {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px;
+  padding-left: calc(var(--label-w) + 12px); min-height: 22px;
+}
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; color: var(--muted); font-size: 0.7rem; }
+.legend-title { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.65rem; }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.legend-swatch { width: 14px; height: 10px; border-radius: 2px; }
+.verdict {
+  /* Looks like a line of text; the padding/margin pair gives it a 44px tap target. */
+  padding: 11px 0; margin: -11px 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--fg); font: inherit; font-size: 0.85rem; font-weight: 700; white-space: nowrap;
+}
+.verdict-more { color: var(--muted); font-weight: 400; }
+.verdict:hover .verdict-more, .verdict:focus-visible .verdict-more { color: var(--fg); text-decoration: underline; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* First-visit hint on the strips */
+.drag-hint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; pointer-events: none;
+  background: var(--pill-bg); color: var(--pill-ink); font-size: 0.85rem; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.drag-hint[hidden] { display: none; }
+.drag-hint-arrows { display: inline-block; animation: drag-hint 1.6s ease-in-out infinite; }
+@keyframes drag-hint { 0%, 100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+
 /* Header */
 .top { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 0; }
 .logo {
@@ -114,6 +144,7 @@ body {
 .btn-pill[aria-expanded="true"], .btn-pill[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
 .btn-icon-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 0 12px; }
 .btn-icon-pill svg { width: 18px; height: 18px; flex: none; }
+.narrow-icon { display: none; }
 .wide-label { display: none; }
 @media (min-width: 1000px) { .wide-label { display: inline; } }
 /* Phones: the strip labels already name the shows. */
@@ -211,10 +242,31 @@ canvas { display: block; width: 100%; height: 100%; }
 .scrub:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--band-0); }
 .scrub:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--band-0); }
 
+/* Tale of the tape: between the cards on wide screens, under them on
+   narrow ones; on short landscape phones the verdict opens it in Stats. */
+.tape { display: none; min-width: 0; contain: layout paint; }
+.tape-inner {
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-solid);
+}
+.tape-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px; margin-bottom: 4px; }
+.tape-title { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.tape-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.tape-table th, .tape-table td { padding: 3px 4px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tape-table thead th { color: var(--muted); font-weight: 700; font-size: 0.72rem; }
+.tape-table thead th:first-child { width: 38%; }
+.tape-table tbody th { color: var(--muted); font-weight: 400; }
+.tape-table tbody tr + tr > * { border-top: 1px solid var(--line); }
+.tape-slot { display: inline-block; min-width: 1.4em; padding: 0 4px; border: 1px solid var(--line); border-radius: 999px; text-align: center; font-size: 0.65rem; }
+.tape-table td.win { color: var(--fg); font-weight: 800; }
+.tape-table td.win::after { content: " ✓"; color: var(--band-0); }
+.tape-table td.lose { color: var(--muted); }
+.stats-tape { grid-column: 1 / -1; }
+
 /* Head-to-head cards */
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
 .card {
   position: relative; min-width: 0; overflow: hidden;
+  contain: layout paint; /* card text changes on every scrub step: keep that relayout local */
   padding: clamp(8px, 1.6dvh, 14px) 14px clamp(8px, 1.6dvh, 14px) 20px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
@@ -353,11 +405,16 @@ button.stat:hover, button.stat:focus-visible { border-color: var(--fg); outline:
 #game-higher, #game-lower { background: transparent; color: var(--fg); border: 1px solid var(--fg); }
 /* The way into the game: coloured and labelled so people find it, with a
    gentle pulse until it's been opened once. */
-.btn-play { background: var(--band-0); color: var(--ink-0); border-color: transparent; }
-.btn-play.nudge { animation: play-nudge 2.4s ease-in-out infinite; }
+.btn-play { position: relative; background: var(--band-0); color: var(--ink-0); border-color: transparent; }
+/* The pulse is a ring animating only opacity/scale, so it runs on the
+   compositor and never repaints the header while you drag. */
+.btn-play.nudge::after {
+  content: ""; position: absolute; inset: -4px; border-radius: inherit; pointer-events: none;
+  border: 3px solid var(--band-0); opacity: 0; animation: play-nudge 2.4s ease-out infinite;
+}
 @keyframes play-nudge {
-  0%, 60%, 100% { box-shadow: 0 0 0 0 transparent; }
-  30% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--band-0) 35%, transparent); }
+  0% { opacity: 0.6; transform: scale(0.94); }
+  45%, 100% { opacity: 0; transform: scale(1.12); }
 }
 
 /* Mouse only: on touch screens :hover sticks after a tap and looks like a pick. */
@@ -389,47 +446,58 @@ body.game-open { overflow: hidden; }
 .toast:not([hidden]) { animation: toast-in 0.2s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
-/* Portrait phones: rotate prompt */
-.rotate {
-  position: fixed; inset: 0; z-index: 100;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  padding: 24px; text-align: center;
-  background: rgba(11, 13, 18, 0.97);
-  font-size: 1.1rem;
-}
-.rotate[hidden] { display: none; }
-.rotate p { margin: 0; max-width: 18em; }
-.rotate-phone { width: 72px; height: 72px; color: var(--band-0); animation: rotate-phone 2.4s ease-in-out infinite; }
-@keyframes rotate-phone {
-  0%, 20% { transform: rotate(0deg); }
-  50%, 80% { transform: rotate(-90deg); }
-  100% { transform: rotate(0deg); }
-}
-.rotate-actions { display: flex; flex-direction: column; gap: 10px; }
 .btn {
   min-height: 44px; padding: 0 22px; border-radius: 999px; border: 0;
   background: var(--band-0); color: var(--ink-0); font: inherit; font-weight: 700; cursor: pointer;
 }
-.btn-quiet { background: transparent; color: var(--fg); border: 1px solid var(--line); }
 
-/* Portrait fallback once the prompt is dismissed: functional, scrolls. */
+/* Where the tape fits (after the base .cards rule so these win). */
+@media (min-height: 561px) {
+  .tape { display: block; grid-column: 1 / -1; order: 3; }
+}
+@media (min-height: 561px) and (min-width: 1000px) {
+  .cards { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px) minmax(0, 1fr); }
+  .tape { grid-column: auto; order: 0; }
+}
+
+/* Portrait phones: strips go full width, with A's name above the pair and
+   B's below so the laser runs unbroken; the page scrolls. */
 @media (orientation: portrait) and (max-width: 700px) {
   .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto; align-content: start; }
   .stage { justify-content: flex-start; }
-  .top { flex-wrap: wrap; }
-  .strips { grid-template-rows: 64px 16px 64px 16px; }
-  .cards { grid-template-columns: 1fr; }
-  .search { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
+  /* Two header rows: logo + Play, then search + the small buttons. */
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; }
+  .logo { grid-column: 1 / 4; }
+  #game-open { grid-column: 2 / 5; grid-row: 1; }
+  .search { grid-column: 1; grid-row: 2; max-width: none; margin-left: 0; min-width: 0; }
+  #stats-open { grid-row: 2; }
+  .stats-label { display: none; }
+  .narrow-icon { display: block; }
+  .info { padding-left: 0; }
+  .strips { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 76px 18px 76px 18px auto; }
+  .label { grid-column: 1; flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; }
+  .label[data-slot="a"] { grid-row: 1; padding-bottom: 6px; }
+  .label[data-slot="b"] { grid-row: 6; padding-top: 2px; }
+  .label-name { font-size: 1rem; }
+  .strip, .skeleton, .ticks { grid-column: 1; }
+  .strip[data-slot="a"], .skeleton[data-slot="a"] { grid-row: 2; }
+  .ticks[data-slot="a"] { grid-row: 3; }
+  .strip[data-slot="b"], .skeleton[data-slot="b"] { grid-row: 4; }
+  .ticks[data-slot="b"] { grid-row: 5; }
+  .track { grid-column: 1; grid-row: 2 / 6; }
+  .controls { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
+  .mode { grid-column: 1; width: min(240px, 100%); }
+  .scrub { grid-column: 1; grid-row: 2; }
+  .cards { grid-template-columns: minmax(0, 1fr); }
   .sheet-body { grid-template-columns: 1fr; }
-  /* The label column is too narrow for the toggle here: give it a row. */
-  .controls { row-gap: 6px; }
-  .mode { grid-column: 1 / -1; width: min(240px, 100%); }
-  .scrub { grid-row: 2; }
 }
 
-/* Short landscape screens (phones): tighten the header and controls. */
+/* Short landscape screens (phones): tighten the header and controls, and
+   keep the colour key + verdict to one line so the strips keep their height. */
 @media (max-height: 420px) {
   .top { min-height: 28px; }
+  .legend-title, .verdict-more { display: none; }
+  .info { flex-wrap: nowrap; }
   .card-show { font-size: 0.65rem; }
 }
 

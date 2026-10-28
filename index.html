@@ -34,7 +34,10 @@
                aria-expanded="false" aria-controls="search-results" aria-label="Search for a TV show">
         <div class="search-results" id="search-results" hidden></div>
       </div>
-      <button type="button" class="btn-pill" id="stats-open" aria-expanded="false" aria-controls="stats">Stats</button>
+      <button type="button" class="btn-pill btn-icon-pill" id="stats-open" aria-expanded="false" aria-controls="stats" aria-label="Stats">
+        <svg class="narrow-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span class="stats-label">Stats</span>
+      </button>
       <button type="button" class="btn-pill btn-icon-pill" id="palette" aria-pressed="false" title="Colour-blind safe palette" aria-label="Colour-blind safe palette">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
       </button>
@@ -49,6 +52,10 @@
     </header>
 
     <main class="stage">
+      <div class="info">
+        <div class="legend" id="legend" role="list" aria-label="Colour key: episode rating"></div>
+        <button type="button" class="verdict" id="verdict" aria-controls="stats" title="See the tale of the tape"></button>
+      </div>
       <section class="strips" id="strips" aria-label="Episode rating barcodes">
         <div class="label" data-slot="a"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
         <canvas class="strip" data-slot="a" role="img"></canvas>
@@ -58,7 +65,10 @@
         <canvas class="strip" data-slot="b" role="img"></canvas>
         <div class="skeleton" data-slot="b" hidden></div>
         <canvas class="ticks" data-slot="b" aria-hidden="true"></canvas>
-        <div class="track" id="track"><div class="laser" id="laser"></div></div>
+        <div class="track" id="track">
+          <div class="laser" id="laser"></div>
+          <div class="drag-hint" id="drag-hint" hidden><span class="drag-hint-arrows" aria-hidden="true">⟵ ⟶</span> Drag across the strips</div>
+        </div>
       </section>
 
       <section class="controls">
@@ -71,6 +81,7 @@
 
       <section class="cards">
         <article class="card" data-slot="a"></article>
+        <section class="tape" id="tape" aria-label="Tale of the tape"></section>
         <article class="card" data-slot="b"></article>
       </section>
     </main>
@@ -111,18 +122,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
-  <div class="rotate" id="rotate" hidden>
-    <svg class="rotate-phone" viewBox="0 0 64 64" aria-hidden="true">
-      <rect x="20" y="6" width="24" height="52" rx="5" fill="none" stroke="currentColor" stroke-width="3"/>
-      <circle cx="32" cy="51" r="2" fill="currentColor"/>
-    </svg>
-    <p>Turn your phone sideways for the best view</p>
-    <div class="rotate-actions">
-      <button type="button" class="btn" id="rotate-lock" hidden>Go fullscreen</button>
-      <button type="button" class="btn btn-quiet" id="rotate-dismiss">Continue anyway</button>
-    </div>
-  </div>
 
   <script>
     // ES modules and fetch() don't load over file://, so say how to run it.

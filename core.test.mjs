@@ -6,6 +6,7 @@ import {
   prepareShow, bandIndex, ratingToBand, PALETTES, layout, episodeAt, maxMinutes,
   segments, episodeCode, formatDelta, hoursIn, hasEnoughData, stats, whiplashLabel,
   positionOf, fromTvmaze, encodeState, decodeState, snapP, CONFIG, gameItems, gameGap, pickNext, judge,
+  tale, seasonAverages,
 } from "./core.js";
 
 const mk = (eps) => prepareShow({ id: 1, name: "T", year: 2000, episodes: eps });
@@ -189,4 +190,30 @@ test("game: show mode uses whole shows only and avoids recent cards", () => {
     assert.ok(!avoid.includes(next.key), `repeat at ${score}`);
     current = next;
   }
+});
+
+test("tale of the tape: rounds, winners, ties and the verdict", () => {
+  const season = (s, ratings) => ratings.map((rating, i) => ({ s, e: i + 1, rating, runtime: 30 }));
+  // A: strong start, weak finish. B: steady, ends well.
+  const a = mk([...season(1, [9, 9.2, 9.1, 9, 9]), ...season(2, [7, 7.1, 6.9])]);
+  const b = mk([...season(1, [8, 8.1, 8]), ...season(2, [8.3, 8.4, 8.2])]);
+  assert.deepEqual(seasonAverages(a).map((x) => [x.s, Number(x.mean.toFixed(2))]), [[1, 9.06], [2, 7]]);
+  const t = tale(a, b);
+  const won = Object.fromEntries(t.rows.map((r) => [r.key, r.winner]));
+  assert.deepEqual(won, { avg: "a", peak: "a", best: "a", worst: "b", steady: "b", latest: "b" });
+  assert.deepEqual(t.score, { a: 3, b: 3 });
+  assert.equal(t.winner, "draw");
+  assert.equal(t.rows.find((r) => r.key === "best").a.s, 1);
+  // Equal as shown = tie.
+  const same = tale(b, mk(b.episodes));
+  assert.ok(same.rows.every((r) => r.winner === "tie"));
+  assert.equal(same.winner, "draw");
+});
+
+test("tale of the tape on presets: Breaking Bad vs Game of Thrones", () => {
+  const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
+  const t = tale(prepareShow(presets[169]), prepareShow(presets[82]));
+  assert.equal(t.rows.length, 6);
+  assert.ok(t.rows.every((r) => r.winner), "every round decided or tied");
+  assert.equal(t.rows.find((r) => r.key === "latest").winner, "a"); // GoT's S8
 });
