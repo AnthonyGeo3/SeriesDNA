@@ -36,7 +36,7 @@ body {
 .app {
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr); /* About pill, header, stage */
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--gap);
   padding:
     max(8px, env(safe-area-inset-top))
@@ -86,41 +86,6 @@ body {
 .drag-hint[hidden] { display: none; }
 .drag-hint-arrows { display: inline-block; animation: drag-hint 1.6s ease-in-out infinite; }
 @keyframes drag-hint { 0%, 100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
-
-/* About: a small pill centred at the top (inline ⓘ by the logo on short
-   landscape phones, where the strips need every pixel of height). */
-.about-bar { display: flex; justify-content: center; margin-bottom: calc(var(--gap) * -0.5); }
-.about-btn {
-  position: relative; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 12px;
-  border: 1px solid var(--line); border-radius: 999px; background: transparent; cursor: pointer;
-  color: var(--muted); font: inherit; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
-}
-.about-btn::before { content: ""; position: absolute; inset: -9px -4px; } /* 44px tap target */
-.about-btn:hover, .about-btn:focus-visible { color: var(--fg); border-color: var(--fg); outline: none; }
-.about-btn-inline { display: none; width: 26px; padding: 0; justify-content: center; font-size: 0.85rem; flex: none; }
-
-.about {
-  position: fixed; inset: 0; z-index: 95; overflow-y: auto; overscroll-behavior: contain;
-  padding: 0 max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: var(--bg);
-}
-.about[hidden] { display: none; }
-.about-head {
-  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
-  max-width: 720px; margin: 0 auto; padding: max(8px, env(safe-area-inset-top)) 0 8px; background: var(--bg);
-}
-.about-head h2 { margin: 0; font-size: clamp(0.85rem, 1.6vw, 1.15rem); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
-.about-body { max-width: 720px; margin: 0 auto; line-height: 1.55; }
-.about-body h3 { margin: 1.6em 0 0.4em; font-size: 1.05rem; }
-.about-body p, .about-body ul { margin: 0 0 0.8em; }
-.about-body ul { padding-left: 1.2em; }
-.about-body li + li { margin-top: 0.35em; }
-.about-body a { color: var(--band-0); }
-.about-lead { font-size: 1.1rem; }
-.about-key { list-style: none; padding: 0 !important; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 16px; }
-.about-key li { display: flex; align-items: center; gap: 8px; margin: 0 !important; }
-.about-more { margin-top: 1.6em !important; font-weight: 700; }
-body.about-open { overflow: hidden; }
 
 /* Header */
 .top { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 0; }
@@ -498,7 +463,7 @@ body.game-open { overflow: hidden; }
 /* Portrait phones: strips go full width, with A's name above the pair and
    B's below so the laser runs unbroken; the page scrolls. */
 @media (orientation: portrait) and (max-width: 700px) {
-  .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; align-content: start; }
+  .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto; align-content: start; }
   .stage { justify-content: flex-start; }
   /* Two header rows: logo + Play, then search + the small buttons. */
   /* Every item gets an explicit cell: auto-placement put the logo on a
@@ -534,9 +499,6 @@ body.game-open { overflow: hidden; }
 /* Short landscape screens (phones): tighten the header and controls, and
    keep the colour key + verdict to one line so the strips keep their height. */
 @media (max-height: 420px) {
-  .app { grid-template-rows: auto minmax(0, 1fr); }
-  .about-bar { display: none; }
-  .about-btn-inline { display: inline-flex; }
   .top { min-height: 28px; }
   .legend-title, .verdict-more { display: none; }
   .info { flex-wrap: nowrap; }

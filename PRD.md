@@ -21,21 +21,20 @@ It's built for a two-minute live demo to a team (section 13), and also for peopl
 
 ## 2. What a visitor sees
 
-1. **About:** a small "ⓘ About" pill centred at the very top. On short landscape phones it's an ⓘ beside the logo, so the strips keep their height. It opens a full-screen, scrollable **About** page (section 6).
-2. **Header:**
+1. **Header:**
    - Logo, plus the "A vs B" matchup chips on wide screens.
    - A search box.
    - **Stats**, the **palette** switch, and **Share**.
    - A filled, coloured **Play** button for the game: "Play Higher or Lower" on wide screens. It pulses until the game has been opened once.
-3. **Colour key and verdict:** one line above the strips. It reads "Episode rating: 8.8+ · 8.4+ · 8.0+ · 7.6+ · <7.6 · no rating", with a swatch for each band, followed by the verdict, e.g. "⚖ Breaking Bad wins 5–1 · see why".
-4. **The two barcodes**, The Boys vs Grey's Anatomy by default:
+2. **Colour key and verdict:** one line above the strips. It reads "Episode rating: 8.8+ · 8.4+ · 8.0+ · 7.6+ · <7.6 · no rating", with a swatch for each band, followed by the verdict, e.g. "⚖ Breaking Bad wins 5–1 · see why".
+3. **The two barcodes**, The Boys vs Grey's Anatomy by default:
    - Season ticks underneath each strip.
    - A coverage chip on each label ("99% rated") and the total hours.
    - Golden Era and Drop-Off markers drawn on the strips.
    - On a first visit, a **"Drag across the strips"** hint sits on top until the strips are first used.
-5. **Controls:** a **% Lifespan / Hours** toggle and the scrubber slider.
-6. **Head-to-head cards:** the episode under the laser in each show. Each shows the code, title, rating, the difference from that show's average, and hours watched so far.
-7. **Tale of the tape:** six rounds with a winner on each and an overall verdict. It sits between the cards on laptops and below them in portrait. On a landscape phone it opens from the verdict, inside the Stats sheet.
+4. **Controls:** a **% Lifespan / Hours** toggle and the scrubber slider.
+5. **Head-to-head cards:** the episode under the laser in each show. Each shows the code, title, rating, the difference from that show's average, and hours watched so far.
+6. **Tale of the tape:** six rounds with a winner on each and an overall verdict. It sits between the cards on laptops and below them in portrait. On a landscape phone it opens from the verdict, inside the Stats sheet.
 
 ## 3. File structure
 
@@ -192,8 +191,6 @@ Each card shows: show name · `S03E06` · episode title (truncated with an ellip
 - **Stats sheet:** a bottom drawer on phones and a side panel (380px) on wide screens, where the app makes room so you can keep scrubbing.
   - It leads with the tale of the tape, then Golden Era, Whiplash and Drop-Off for each show.
   - Tapping a stat jumps the laser there. On phones the drawer closes so you see it land.
-- **About page:** a plain-language summary of this document, for visitors. It covers what Series DNA is and what we set out to achieve, how to read the strips (with a live colour key that follows the palette), what each control does, how the tale of the tape decides a winner, the game, where the data comes from and its limits, and how it's built. It ends with a link to this PRD on GitHub. Escape or ✕ closes it, and focus returns to the button that opened it.
-  - If the thresholds, features or data caveats change, update the About copy in `index.html` too.
 - **Open Graph tags** point at `https://anthonygeo3.github.io/SeriesDNA/og.png`, a static screenshot of the default matchup.
 - **Manifest:** `display: standalone`, `orientation: any`, with 192px and 512px icons (the 512px one is maskable).
 
@@ -213,7 +210,7 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 - The tape is hidden, and the verdict opens it in the Stats sheet.
 
 ### Portrait phone
-- **Header:** the About pill above, then two rows: logo and a wide Play button, then search with the icon buttons (Stats becomes a bar-chart icon).
+- **Header, in two rows:** logo and a wide Play button, then search with the icon buttons (Stats becomes a bar-chart icon).
 - **Strips:** full width, 76px each. **A's name sits above the pair and B's below**, so the laser runs unbroken across both.
 - **Controls:** full width, with the toggle on its own row.
 - **Below:** the cards stacked, then the tale of the tape. The page scrolls.
@@ -257,7 +254,7 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 - **Phase 2, toggle, live search and stats:** done. Searching "Severance" works live, and the presets work offline.
 - **Phase 3, polish and sharing:** done. Share links round-trip in a fresh browser.
 - **Phase 4, deploy:** done. Live on Pages, and real-phone testing found the issues fixed in the changes below.
-- **After launch:** the Higher or Lower game, the colour key, the tale of the tape, the portrait layout, and the About page.
+- **After launch:** the Higher or Lower game, the colour key, the tale of the tape, and the portrait layout.
 
 ### Changes from the original plan
 | Original plan | Now | Why |
@@ -271,7 +268,6 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 | No colour key | A colour key above the strips, and a first-visit drag hint | Nothing explained the colours or that the strips can be dragged |
 | Slider 0–1000 only | Slider 0–1000, positions snapped to 1/10,000 | So links reproduce the exact episodes on very long shows |
 | No game | Higher or Lower, two modes | Makes the site fun beyond a single comparison |
-| No explanation in the app | An About page summarising this PRD, opened from a small pill at the top | Lets curious visitors see what it is and why, without cluttering the main view |
 
 ## 11. Test checklist
 
@@ -289,8 +285,6 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 - [x] Reduced motion turns off flips and tweens
 - [x] Keyboard workaround: the first result stays tappable above a simulated keyboard, and the search key closes it
 - [x] Game: scoring, per-mode best scores, no peeking, no quick repeats, and the layout on all three sizes
-- [x] Portrait header at 320–480px: logo and Play on row 1; search and three square buttons on row 2
-- [x] About: centred pill (inline ⓘ on landscape phones, strips unchanged), opens and closes, Escape returns focus, PRD link
 - [~] Dragging smoothness:
   - At 4× CPU throttle, a steady 60fps everywhere.
   - At 6× on the current (slower) dev machine, both this build and the previous one drop frames. The newer UI costs about 6% more per frame (roughly 3.15ms against 2.96ms, unthrottled).
