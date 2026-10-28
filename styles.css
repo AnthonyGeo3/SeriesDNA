@@ -57,18 +57,6 @@ body {
 .stage > * { flex: none; }
 .stage > .strips { flex: 0 1 auto; }
 
-/* Rivalry pills: only where there's height to spare (phones get them in the
-   search dropdown instead). */
-.rivalries { display: flex; flex-wrap: wrap; gap: 8px; padding-left: calc(var(--label-w) + 12px); }
-.rivalries:empty { display: none; }
-.rivalries button {
-  height: 44px; padding: 0 16px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; font-weight: 600;
-}
-.rivalries button:hover, .rivalries button:focus-visible { color: var(--fg); border-color: var(--fg); outline: none; }
-.rivalries button[aria-pressed="true"] { color: var(--fg); border-color: var(--band-0); }
-@media (max-height: 560px) { .rivalries { display: none; } }
-
 /* Header */
 .top { display: flex; align-items: center; gap: 12px; min-height: 44px; min-width: 0; }
 .logo {
@@ -101,7 +89,8 @@ body {
 .search input:focus-visible { outline: 2px solid var(--band-0); outline-offset: 1px; }
 .search-results {
   position: absolute; z-index: 50; top: calc(100% + 6px); right: 0;
-  width: min(440px, calc(100vw - 32px)); max-height: min(60dvh, 420px); overflow: auto;
+  width: min(440px, calc(100vw - 32px)); max-height: min(60dvh, 420px, var(--results-max, 420px));
+  overflow: auto; overscroll-behavior: contain;
   padding: 6px; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--card-solid); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
 }
@@ -351,6 +340,10 @@ button.stat:hover, button.stat:focus-visible { border-color: var(--fg); outline:
   .cards { grid-template-columns: 1fr; }
   .search { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
   .sheet-body { grid-template-columns: 1fr; }
+  /* The label column is too narrow for the toggle here: give it a row. */
+  .controls { row-gap: 6px; }
+  .mode { grid-column: 1 / -1; width: min(240px, 100%); }
+  .scrub { grid-row: 2; }
 }
 
 /* Short landscape screens (phones): tighten the header and controls. */

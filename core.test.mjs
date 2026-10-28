@@ -135,7 +135,3 @@ test("URL state round-trips and tolerates junk", () => {
   assert.equal(snapP(0.123456), 0.1235);
 });
 
-test("every rivalry is a preset", () => {
-  const presets = JSON.parse(readFileSync(new URL("./data/presets.json", import.meta.url)));
-  for (const r of CONFIG.rivalries) assert.ok(presets[r.a] && presets[r.b], r.name);
-});

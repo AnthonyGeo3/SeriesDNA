@@ -47,7 +47,6 @@ const els = {
   statsOpen: $("#stats-open"),
   statsBackdrop: $("#stats-backdrop"),
   toast: $("#toast"),
-  rivalries: $("#rivalries"),
   palette: $("#palette"),
   share: $("#share"),
 };
@@ -385,40 +384,9 @@ function setSlot(slot, show) {
 function refreshAfterShowChange() {
   renderLabels();
   renderStats();
-  renderRivalries();
   animateWidths(); // the longest runtime may have changed (hours mode)
   drawStrips();
   queueFrame();
-}
-
-// ---- Rivalries -------------------------------------------------------------------
-
-const isCurrent = (r) => state.shows.a?.id === r.a && state.shows.b?.id === r.b;
-
-function loadRivalry(r) {
-  setSlot("a", prepareShow(state.presets[r.a]));
-  setSlot("b", prepareShow(state.presets[r.b]));
-  state.p = 0;
-  refreshAfterShowChange();
-}
-
-function renderRivalries() {
-  els.rivalries.replaceChildren(...CONFIG.rivalries.map((r) =>
-    h("button", { type: "button", "aria-pressed": String(isCurrent(r)), onclick: () => loadRivalry(r) }, r.name)));
-}
-
-function rivalryRow(r) {
-  return h("div", { class: "result" },
-    h("span", { class: "result-name" }, r.name,
-      h("span", { class: "result-year" }, `${state.presets[r.a].name} vs ${state.presets[r.b].name}`)),
-    h("button", {
-      type: "button",
-      onclick: () => {
-        closeSearch();
-        els.searchInput.blur();
-        loadRivalry(r);
-      },
-    }, "Load"));
 }
 
 // ---- Search ----------------------------------------------------------------------
@@ -458,10 +426,6 @@ function renderResults(q, live) {
   const box = els.searchResults;
   box.replaceChildren();
   const presets = presetMatches(q);
-  if (!q) {
-    box.append(h("div", { class: "results-head" }, "Rivalries"));
-    for (const r of CONFIG.rivalries) box.append(rivalryRow(r));
-  }
   if (presets.length) {
     box.append(h("div", { class: "results-head" }, q ? "Presets" : "Presets (work offline)"));
     for (const p of presets) box.append(resultRow(p));
@@ -500,6 +464,17 @@ async function searchLive(q) {
 function openSearch() {
   els.searchResults.hidden = false;
   els.searchInput.setAttribute("aria-expanded", "true");
+  fitResults();
+}
+
+// In landscape an on-screen keyboard can cover most of the screen; keep the
+// dropdown inside what's still visible above it.
+function fitResults() {
+  if (els.searchResults.hidden) return;
+  const vv = window.visualViewport;
+  const visibleBottom = vv ? vv.offsetTop + vv.height : innerHeight;
+  const top = els.searchResults.getBoundingClientRect().top;
+  els.searchResults.style.setProperty("--results-max", `${Math.max(64, Math.floor(visibleBottom - top - 8))}px`);
 }
 
 function closeSearch() {
@@ -524,6 +499,23 @@ function bindSearch() {
   els.searchInput.addEventListener("focus", () => {
     if (!els.searchInput.value.trim()) renderResults("");
   });
+  // The keyboard's search key searches now and puts the keyboard away so
+  // the results can be tapped; touching the list does the same.
+  els.searchInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const q = els.searchInput.value.trim();
+    if (q.length >= 2) {
+      clearTimeout(searchTimer);
+      searchLive(q);
+    }
+    els.searchInput.blur();
+  });
+  els.searchResults.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && document.activeElement === els.searchInput) els.searchInput.blur();
+  });
+  window.visualViewport?.addEventListener("resize", fitResults);
+  window.visualViewport?.addEventListener("scroll", fitResults);
   document.addEventListener("pointerdown", (e) => {
     if (!$("#search").contains(e.target)) closeSearch();
   });
@@ -745,7 +737,6 @@ async function init() {
   state.widthFrac = targetWidths();
   els.status.textContent = "";
   renderLabels();
-  renderRivalries();
   drawAll();
   bindScrubbing();
   bindMode();
