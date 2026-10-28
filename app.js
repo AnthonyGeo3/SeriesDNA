@@ -737,6 +737,31 @@ function gameShows() {
   return [...byId.values()];
 }
 
+function bindAbout() {
+  const about = $("#about");
+  let opener = null;
+  const close = () => {
+    about.hidden = true;
+    document.body.classList.remove("about-open");
+    opener?.focus();
+  };
+  for (const button of [$("#about-open"), $("#about-open-inline")]) {
+    button.addEventListener("click", () => {
+      closeSearch();
+      toggleStats(false);
+      opener = button;
+      about.hidden = false;
+      about.scrollTop = 0;
+      document.body.classList.add("about-open");
+      $("#about-close").focus();
+    });
+  }
+  $("#about-close").addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !about.hidden) close();
+  });
+}
+
 function bindHeaderButtons() {
   const game = createGame({
     getShows: gameShows,
@@ -836,6 +861,7 @@ async function init() {
   bindSearch();
   bindStats();
   bindHeaderButtons();
+  bindAbout();
   els.verdict.addEventListener("click", () => toggleStats(true));
   bindResize();
   setP(want.p, false);

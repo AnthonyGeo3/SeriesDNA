@@ -21,8 +21,14 @@
 </head>
 <body>
   <div class="app" id="app">
+    <div class="about-bar">
+      <button type="button" class="about-btn" id="about-open" aria-haspopup="dialog" aria-controls="about">
+        <span aria-hidden="true">ⓘ</span> About
+      </button>
+    </div>
     <header class="top">
       <h1 class="logo">Series <span>DNA</span></h1>
+      <button type="button" class="about-btn about-btn-inline" id="about-open-inline" aria-haspopup="dialog" aria-controls="about" aria-label="About Series DNA">ⓘ</button>
       <p class="matchup">
         <span class="slot" data-slot="a"><b>A</b> <span class="slot-name"></span></span>
         <span class="vs">vs</span>
@@ -119,6 +125,49 @@
       <button type="button" class="btn game-btn" id="game-lower">▼ Lower</button>
       <button type="button" class="btn game-btn" id="game-again" hidden>Play again</button>
     </div>
+  </div>
+
+  <div class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden>
+    <div class="about-head">
+      <h2 id="about-title">About Series DNA</h2>
+      <button type="button" class="btn-icon" id="about-close" aria-label="Close About">✕</button>
+    </div>
+    <article class="about-body">
+      <p class="about-lead">Series DNA turns a TV show into a barcode: <b>one stripe per episode, coloured by its rating</b>. Put two shows side by side and you can see at a glance where each one hit its golden era, sagged in the middle, and stuck (or crashed) the landing.</p>
+
+      <h3>What we set out to do</h3>
+      <p>Make a fun, quick way to settle the “which show is better?” argument: something you can open from a link on your phone, get in a second, and then play with. It started as a two-minute live demo for a team and grew into a site anyone can land on cold. Two rules guided it: it has to be understandable without an explanation (this page is the extra credit), and it has to keep working when the Wi-Fi doesn't.</p>
+
+      <h3>How to read the strips</h3>
+      <ul class="about-key" aria-label="Colour key">
+        <li><span class="legend-swatch" style="background: var(--band-0)"></span>8.8 and up: outstanding</li>
+        <li><span class="legend-swatch" style="background: var(--band-1)"></span>8.4 to 8.7: great</li>
+        <li><span class="legend-swatch" style="background: var(--band-2)"></span>8.0 to 8.3: good</li>
+        <li><span class="legend-swatch" style="background: var(--band-3)"></span>7.6 to 7.9: so-so</li>
+        <li><span class="legend-swatch" style="background: var(--band-4)"></span>under 7.6: weak</li>
+        <li><span class="legend-swatch" style="background: var(--nodata)"></span>no rating yet</li>
+      </ul>
+      <p>Ticks under each strip mark the seasons. A solid outline marks the <b>Golden Era</b> (the best run of five episodes) and a dashed one marks the <b>Drop-off</b> (the worst stretch). Most TV ratings sit between 7.5 and 9, so the colour bands are tuned to that range rather than to the full 1 to 10 scale.</p>
+
+      <h3>What you can do</h3>
+      <ul>
+        <li><b>Drag across the strips</b> (or use the slider). The two cards show the episode at the same point in each show's life, with its rating and how it compares to that show's average.</li>
+        <li><b>Search any show</b> and send it to slot A or B. The 15 built-in shows work offline.</li>
+        <li><b>Lifespan / Hours</b>: Lifespan stretches both shows to the same width; Hours sizes them by total running time, so you can see the time commitment.</li>
+        <li><b>Tale of the tape</b>: six head-to-head rounds (average episode, peak run, best season, worst season, consistency and latest season) decide a winner, e.g. “Breaking Bad wins 5–1”. Tap the verdict or <b>Stats</b> for the detail.</li>
+        <li><b>Share</b>: the link reopens exactly what you're looking at, with the same shows, position and view.</li>
+        <li><b>Palette</b> (the half-circle button): switches to a colour-blind-safe scale that reads by lightness, not hue.</li>
+        <li><b>Play Higher or Lower</b>: guess whether the next show (or season) is rated higher or lower. Two modes, Show vs Show and Season vs Season, and it gets harder as your score climbs.</li>
+      </ul>
+
+      <h3>Where the numbers come from</h3>
+      <p>Episode ratings are community ratings from <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a>. They're great for spotting a show's shape, but they're not gospel: smaller shows have few voters, and some running times are TV slot lengths (Grey's Anatomy is listed at 60 minutes an episode, so Hours mode overstates its time). Long-running soaps and shows with too few ratings aren't drawn rather than drawn badly.</p>
+
+      <h3>How it's built</h3>
+      <p>Plain HTML, CSS and JavaScript with canvas drawing: no frameworks, no build step and no tracking. It's hosted on GitHub Pages. Your palette choice, game best scores and any shows you search for are remembered on your device only; searches go to TVmaze.</p>
+
+      <p class="about-more"><a href="https://github.com/AnthonyGeo3/SeriesDNA/blob/main/PRD.md" target="_blank" rel="noopener">Read the full product doc (PRD) on GitHub ↗</a></p>
+    </article>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
