@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Series DNA</title>
+  <meta name="description" content="Every episode of two TV shows as colour barcodes, head to head.">
+  <meta name="theme-color" content="#0b0d12">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="top">
+      <h1 class="logo">Series <span>DNA</span></h1>
+      <p class="matchup">
+        <span class="slot" data-slot="a"><b>A</b> <span class="slot-name"></span></span>
+        <span class="vs">vs</span>
+        <span class="slot" data-slot="b"><b>B</b> <span class="slot-name"></span></span>
+      </p>
+    </header>
+
+    <main class="stage">
+      <section class="strips" id="strips" aria-label="Episode rating barcodes">
+        <div class="label" data-slot="a"><span class="label-name"></span><span class="chip coverage"></span></div>
+        <canvas class="strip" data-slot="a" role="img"></canvas>
+        <canvas class="ticks" data-slot="a" aria-hidden="true"></canvas>
+        <div class="label" data-slot="b"><span class="label-name"></span><span class="chip coverage"></span></div>
+        <canvas class="strip" data-slot="b" role="img"></canvas>
+        <canvas class="ticks" data-slot="b" aria-hidden="true"></canvas>
+        <div class="track" id="track"><div class="laser" id="laser"></div></div>
+      </section>
+  
+      <section class="controls">
+        <input type="range" class="scrub" id="scrub" min="0" max="1000" value="0" aria-label="Scrub through both shows">
+      </section>
+  
+      <section class="cards">
+        <article class="card" data-slot="a"></article>
+        <article class="card" data-slot="b"></article>
+    </section>
+    </main>
+
+    <p class="status" id="status" role="status">Loading…</p>
+  </div>
+
+  <div class="rotate" id="rotate" hidden>
+    <svg class="rotate-phone" viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="20" y="6" width="24" height="52" rx="5" fill="none" stroke="currentColor" stroke-width="3"/>
+      <circle cx="32" cy="51" r="2" fill="currentColor"/>
+    </svg>
+    <p>Turn your phone sideways for the best view</p>
+    <div class="rotate-actions">
+      <button type="button" class="btn" id="rotate-lock" hidden>Go fullscreen</button>
+      <button type="button" class="btn btn-quiet" id="rotate-dismiss">Continue anyway</button>
+    </div>
+  </div>
+
+  <script>
+    // ES modules and fetch() don't load over file://, so say how to run it.
+    if (location.protocol === "file:") {
+      document.getElementById("status").textContent =
+        "Series DNA needs a local web server: run `npx serve` in this folder and open the URL it prints.";
+    }
+  </script>
+</body>
+</html>
