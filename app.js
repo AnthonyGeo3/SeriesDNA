@@ -15,6 +15,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 const FLIP_MIN_GAP_MS = 150;
 const CACHE_PREFIX = "sdna:v1:show:";
 const PALETTE_KEY = "sdna:v1:palette";
+const PLAYED_KEY = "sdna:v1:played";
 const URL_THROTTLE_MS = 300;
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -658,10 +659,25 @@ function bindHeaderButtons() {
     getStyle: () => ({ palette: state.palette, theme }),
     reducedMotion,
   });
-  $("#game-open").addEventListener("click", (e) => {
+  // Pulse the Play button until the game has been tried once.
+  const play = $("#game-open");
+  let played = false;
+  try {
+    played = localStorage.getItem(PLAYED_KEY) === "1";
+  } catch {
+    // No storage: just pulse this visit.
+  }
+  play.classList.toggle("nudge", !played);
+  play.addEventListener("click", () => {
     closeSearch();
     toggleStats(false);
-    game.open(e.currentTarget);
+    play.classList.remove("nudge");
+    try {
+      localStorage.setItem(PLAYED_KEY, "1");
+    } catch {
+      // Not remembered in private mode.
+    }
+    game.open(play);
   });
   els.share.addEventListener("click", share);
   els.palette.addEventListener("click", () => {

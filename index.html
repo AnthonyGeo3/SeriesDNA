@@ -38,9 +38,9 @@
       <button type="button" class="btn-pill btn-icon-pill" id="palette" aria-pressed="false" title="Colour-blind safe palette" aria-label="Colour-blind safe palette">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
       </button>
-      <button type="button" class="btn-pill btn-icon-pill" id="game-open" title="Higher or Lower game" aria-label="Play Higher or Lower">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10V4m0 0L5 7m3-3 3 3M16 14v6m0 0-3-3m3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="wide-label">Play</span>
+      <button type="button" class="btn-pill btn-icon-pill btn-play" id="game-open" title="Higher or Lower: guess which is rated higher">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 10V4m0 0L5 7m3-3 3 3M16 14v6m0 0-3-3m3 3 3-3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Play<span class="wide-label"> Higher or Lower</span></span>
       </button>
       <button type="button" class="btn-pill btn-icon-pill" id="share" title="Share this moment" aria-label="Share this moment">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -90,6 +90,10 @@
   <div class="game" id="game" role="dialog" aria-modal="true" aria-labelledby="game-title" hidden>
     <div class="game-head">
       <h2 id="game-title">Higher or Lower</h2>
+      <div class="game-modes" id="game-modes" role="group" aria-label="What to compare">
+        <button type="button" data-kind="show" aria-pressed="true">Show vs Show</button>
+        <button type="button" data-kind="season" aria-pressed="false">Season vs Season</button>
+      </div>
       <p class="game-score">Score <b id="game-score">0</b> <span>Best <b id="game-best">0</b></span></p>
       <button type="button" class="btn-icon" id="game-close" aria-label="Close game">✕</button>
     </div>
