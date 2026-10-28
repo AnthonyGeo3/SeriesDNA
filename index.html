@@ -30,7 +30,7 @@
       </p>
       <div class="search" id="search">
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input type="search" id="search-input" placeholder="Search any show…" autocomplete="off" spellcheck="false"
+        <input type="search" id="search-input" placeholder="Search any show…" autocomplete="off" spellcheck="false" enterkeyhint="search"
                aria-expanded="false" aria-controls="search-results" aria-label="Search for a TV show">
         <div class="search-results" id="search-results" hidden></div>
       </div>
@@ -45,7 +45,6 @@
     </header>
 
     <main class="stage">
-      <nav class="rivalries" id="rivalries" aria-label="Rivalries"></nav>
       <section class="strips" id="strips" aria-label="Episode rating barcodes">
         <div class="label" data-slot="a"><span class="label-name"></span><span class="label-meta"><span class="chip coverage"></span><span class="label-hours"></span></span></div>
         <canvas class="strip" data-slot="a" role="img"></canvas>

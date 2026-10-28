@@ -9,11 +9,6 @@ export const CONFIG = {
   defaultRuntime: 45,
   guard: { maxEpisodes: 1500, minCoverage: 0.5 },
   defaultShows: { a: 15299, b: 67 }, // The Boys vs Grey's Anatomy
-  rivalries: [
-    { name: "Sprint vs Marathon", a: 15299, b: 67 }, // The Boys vs Grey's Anatomy
-    { name: "Stuck the Landing vs Crashed", a: 169, b: 82 }, // Breaking Bad vs Game of Thrones
-    { name: "Sci-Fi Showdown", a: 38052, b: 123 }, // Silo vs Lost
-  ],
   // Scrubber resolution. Positions snap to it so a shared link (?at=65.43)
   // lands on exactly the same episodes; fine enough for 1,500-episode shows.
   steps: 10000,
