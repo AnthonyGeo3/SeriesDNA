@@ -2,7 +2,7 @@
 import {
   CONFIG, PALETTES, fromTvmaze, prepareShow, hasEnoughData, maxMinutes, layout,
   episodeAt, positionOf, seasonAt, bandIndex, episodeCode, formatDelta, hoursIn, stats,
-  snapP, encodeState, decodeState,
+  snapP, encodeState, decodeState, tale,
 } from "./core.js";
 import { drawStrip, drawTicks } from "./render.js";
 import { h } from "./dom.js";
@@ -16,6 +16,7 @@ const FLIP_MIN_GAP_MS = 150;
 const CACHE_PREFIX = "sdna:v1:show:";
 const PALETTE_KEY = "sdna:v1:palette";
 const PLAYED_KEY = "sdna:v1:played";
+const DRAGGED_KEY = "sdna:v1:dragged";
 const URL_THROTTLE_MS = 300;
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -42,7 +43,10 @@ const els = {
   laser: $("#laser"),
   scrub: $("#scrub"),
   status: $("#status"),
-  rotate: $("#rotate"),
+  legend: $("#legend"),
+  verdict: $("#verdict"),
+  tape: $("#tape"),
+  dragHint: $("#drag-hint"),
   searchInput: $("#search-input"),
   searchResults: $("#search-results"),
   stats: $("#stats"),
@@ -290,6 +294,85 @@ function bindScrubbing() {
   els.track.addEventListener("pointerup", end);
   els.track.addEventListener("pointercancel", end);
   els.scrub.addEventListener("input", () => setP(els.scrub.value / 1000, true));
+
+  // First visit: say the strips can be dragged, until they have been.
+  let dragged = false;
+  try {
+    dragged = localStorage.getItem(DRAGGED_KEY) === "1";
+  } catch {
+    // No storage: show the hint this visit.
+  }
+  els.dragHint.hidden = dragged;
+  const used = () => {
+    if (!els.dragHint.hidden) {
+      els.dragHint.hidden = true;
+      try {
+        localStorage.setItem(DRAGGED_KEY, "1");
+      } catch {
+        // Not remembered in private mode.
+      }
+    }
+  };
+  els.track.addEventListener("pointerdown", used);
+  els.scrub.addEventListener("input", used);
+}
+
+// ---- Colour key and tale of the tape ---------------------------------------------
+
+// Built from CONFIG.thresholds; the swatches use the palette's CSS variables,
+// so they follow the palette switch.
+function renderLegend() {
+  const t = CONFIG.thresholds;
+  const labels = [...t.map((x) => `${x.toFixed(1)}+`), `<${t.at(-1).toFixed(1)}`];
+  const item = (swatch, text) => h("span", { class: "legend-item", role: "listitem" },
+    h("span", { class: "legend-swatch", style: `background: var(${swatch})` }), text);
+  els.legend.replaceChildren(
+    h("span", { class: "legend-title" }, "Episode rating"),
+    ...labels.map((text, i) => item(`--band-${i}`, text)),
+    item("--nodata", "no rating"));
+}
+
+function verdictText(t) {
+  const { a, b } = t.score;
+  if (t.winner === "draw") return `Dead heat, ${a}–${b}`;
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  return `${state.shows[t.winner].name} wins ${hi}–${lo}`;
+}
+
+function tapeCell(row, side) {
+  const v = row[side];
+  let text = "–";
+  if (v != null && typeof v === "object") text = `S${v.s} · ${v.mean.toFixed(1)}`;
+  else if (v != null) text = row.key === "steady" ? `±${v.toFixed(2)}` : `★ ${v.toFixed(1)}`;
+  const win = row.winner === side;
+  return h("td", { class: win ? "win" : row.winner && row.winner !== "tie" ? "lose" : null },
+    text, win ? h("span", { class: "sr-only" }, " (wins)") : null);
+}
+
+const TAPE_HINTS = {
+  avg: "Mean rating of every rated episode",
+  peak: "Best run of 5 episodes in a row (the Golden Era)",
+  best: "Highest-rated season",
+  worst: "Lowest-rated season: the less bad one wins",
+  steady: "How much ratings swing (standard deviation): steadier wins",
+  latest: "Most recent season with enough ratings",
+};
+
+function tapeTable(t) {
+  const name = (slot) => h("th", { scope: "col", title: state.shows[slot].name },
+    h("span", { class: "tape-slot" }, slot.toUpperCase()), " ", state.shows[slot].name);
+  return h("div", { class: "tape-inner" },
+    h("div", { class: "tape-head" }, h("span", { class: "tape-title" }, "Tale of the tape"), h("b", {}, verdictText(t))),
+    h("table", { class: "tape-table" },
+      h("thead", {}, h("tr", {}, h("th", { scope: "col" }, h("span", { class: "sr-only" }, "Round")), name("a"), name("b"))),
+      h("tbody", {}, ...t.rows.map((row) =>
+        h("tr", {}, h("th", { scope: "row", title: TAPE_HINTS[row.key] }, row.label), tapeCell(row, "a"), tapeCell(row, "b"))))));
+}
+
+function renderTape() {
+  const t = tale(state.shows.a, state.shows.b);
+  els.verdict.replaceChildren(h("span", { "aria-hidden": "true" }, "⚖ "), verdictText(t), h("span", { class: "verdict-more" }, " · see why"));
+  els.tape.replaceChildren(tapeTable(t));
 }
 
 // ---- Mode toggle (% Lifespan <-> Hours) -------------------------------------------
@@ -375,6 +458,7 @@ function setSlot(slot, show) {
 
 function refreshAfterShowChange() {
   renderLabels();
+  renderTape();
   renderStats();
   animateWidths(); // the longest runtime may have changed (hours mode)
   drawStrips();
@@ -538,7 +622,7 @@ function statButton(slot, name, range, value, note) {
 
 function renderStats() {
   if (els.stats.hidden) return;
-  els.statsBody.replaceChildren();
+  els.statsBody.replaceChildren(h("section", { class: "stats-tape" }, tapeTable(tale(state.shows.a, state.shows.b))));
   for (const slot of SLOTS) {
     const show = state.shows[slot];
     const st = state.stats[slot];
@@ -721,39 +805,11 @@ function bindResize() {
   window.addEventListener("resize", redraw); // also catches zoom / DPR changes
 }
 
-// ---- Portrait prompt -----------------------------------------------------------
-
-function bindRotatePrompt() {
-  const portrait = matchMedia("(orientation: portrait) and (max-width: 700px)");
-  let dismissed = false; // per session, in memory only
-  const sync = () => (els.rotate.hidden = dismissed || !portrait.matches);
-  portrait.addEventListener("change", sync);
-  $("#rotate-dismiss").addEventListener("click", () => {
-    dismissed = true;
-    sync();
-  });
-  // Orientation lock only works in fullscreen on Android; iOS has neither.
-  const lock = $("#rotate-lock");
-  if (document.documentElement.requestFullscreen && screen.orientation?.lock) {
-    lock.hidden = false;
-    lock.addEventListener("click", async () => {
-      try {
-        await document.documentElement.requestFullscreen();
-        await screen.orientation.lock("landscape");
-      } catch {
-        // Not supported here: the prompt stays until the phone is rotated.
-      }
-    });
-  }
-  sync();
-}
-
 // ---- Boot ----------------------------------------------------------------------
 
 async function init() {
   setPalette(savedPalette(), false);
   theme = readTheme();
-  bindRotatePrompt();
   try {
     const res = await fetch("data/presets.json");
     if (!res.ok) throw new Error(res.status);
@@ -771,13 +827,16 @@ async function init() {
   syncModeButtons();
   state.widthFrac = targetWidths();
   els.status.textContent = "";
+  renderLegend();
   renderLabels();
+  renderTape();
   drawAll();
   bindScrubbing();
   bindMode();
   bindSearch();
   bindStats();
   bindHeaderButtons();
+  els.verdict.addEventListener("click", () => toggleStats(true));
   bindResize();
   setP(want.p, false);
 }

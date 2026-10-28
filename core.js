@@ -12,8 +12,8 @@ export const CONFIG = {
   // Scrubber resolution. Positions snap to it so a shared link (?at=65.43)
   // lands on exactly the same episodes; fine enough for 1,500-episode shows.
   steps: 10000,
+  minSeasonRated: 3, // seasons with fewer rated episodes don't count as seasons in comparisons
   game: {
-    minSeasonRated: 3, // seasons with fewer rated episodes aren't asked about
     startGap: 0.5, // early pairs differ by at least this much...
     gapStep: 0.04, // ...shrinking by this per point scored...
     minGap: 0.1, // ...down to this
@@ -294,14 +294,9 @@ export function stats(show) {
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
-// Whole-show and per-season averages, rounded to what the player sees.
-export function gameItems(show) {
-  if (!show.rated) return [];
-  const items = [{
-    key: String(show.id), showId: show.id, name: show.name, year: show.year, kind: "show",
-    seasons: show.seasons.length, start: 0, end: show.n - 1, count: show.rated, rating: round1(show.avg),
-  }];
-  if (show.seasons.length < 2) return items; // one season = the same as the whole show
+// Average of each season with at least CONFIG.minSeasonRated rated episodes.
+export function seasonAverages(show) {
+  const out = [];
   show.seasons.forEach(({ s, start }, i) => {
     const end = i + 1 < show.seasons.length ? show.seasons[i + 1].start - 1 : show.n - 1;
     let sum = 0;
@@ -313,11 +308,23 @@ export function gameItems(show) {
         count++;
       }
     }
-    if (count >= CONFIG.game.minSeasonRated) {
-      items.push({ key: `${show.id}:s${s}`, showId: show.id, name: show.name, year: show.year, kind: "season",
-        season: s, start, end, count, rating: round1(sum / count) });
-    }
+    if (count >= CONFIG.minSeasonRated) out.push({ s, start, end, count, mean: sum / count });
   });
+  return out;
+}
+
+// Whole-show and per-season averages, rounded to what the player sees.
+export function gameItems(show) {
+  if (!show.rated) return [];
+  const items = [{
+    key: String(show.id), showId: show.id, name: show.name, year: show.year, kind: "show",
+    seasons: show.seasons.length, start: 0, end: show.n - 1, count: show.rated, rating: round1(show.avg),
+  }];
+  if (show.seasons.length < 2) return items; // one season = the same as the whole show
+  for (const { s, start, end, count, mean } of seasonAverages(show)) {
+    items.push({ key: `${show.id}:s${s}`, showId: show.id, name: show.name, year: show.year, kind: "season",
+      season: s, start, end, count, rating: round1(mean) });
+  }
   return items;
 }
 
@@ -354,4 +361,52 @@ export function pickNext(pool, current, score, { kind = "show", avoid = [], rng 
 export function judge(current, next, guess) {
   if (next.rating === current.rating) return true;
   return guess === "higher" ? next.rating > current.rating : next.rating < current.rating;
+}
+
+// ---- Tale of the tape --------------------------------------------------------------
+
+const TAPE_ROUNDS = [
+  { key: "avg", label: "Average episode", higher: true, digits: 1 },
+  { key: "peak", label: "Peak run", higher: true, digits: 1 }, // the Golden Era
+  { key: "best", label: "Best season", higher: true, digits: 1 },
+  { key: "worst", label: "Worst season", higher: true, digits: 1 }, // the less bad low wins
+  { key: "steady", label: "Consistency", higher: false, digits: 2 }, // std dev: lower wins
+  { key: "latest", label: "Latest season", higher: true, digits: 1 },
+];
+
+function tapeSide(show) {
+  const st = stats(show);
+  const seasons = seasonAverages(show);
+  // Earliest season wins ties for best/worst.
+  const pick = (better) => (seasons.length ? seasons.reduce((x, y) => (better(y.mean, x.mean) ? y : x)) : null);
+  return {
+    avg: show.avg,
+    peak: st.golden?.mean ?? null,
+    best: pick((p, q) => p > q),
+    worst: pick((p, q) => p < q),
+    steady: st.whiplash?.sd ?? null,
+    latest: seasons.at(-1) ?? null,
+  };
+}
+
+// Head to head over six rounds. Each row's winner is judged on the value as
+// shown (so numbers that look equal are a tie); seasons come as
+// { s, mean, ... } and the rest as plain numbers (null when unknown).
+export function tale(a, b) {
+  const A = tapeSide(a);
+  const B = tapeSide(b);
+  const num = (x) => (x != null && typeof x === "object" ? x.mean : x);
+  const rows = TAPE_ROUNDS.map((round) => {
+    const va = num(A[round.key]);
+    const vb = num(B[round.key]);
+    let winner = null;
+    if (va != null && vb != null) {
+      const ra = Number(va.toFixed(round.digits));
+      const rb = Number(vb.toFixed(round.digits));
+      winner = ra === rb ? "tie" : (ra > rb) === round.higher ? "a" : "b";
+    }
+    return { ...round, a: A[round.key], b: B[round.key], winner };
+  });
+  const score = { a: rows.filter((r) => r.winner === "a").length, b: rows.filter((r) => r.winner === "b").length };
+  return { rows, score, winner: score.a === score.b ? "draw" : score.a > score.b ? "a" : "b" };
 }
