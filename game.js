@@ -102,7 +102,8 @@ export function createGame({ getShows, getStyle, reducedMotion }) {
   function next() {
     recent.push(left.key);
     const size = pool.reduce((n, items) => n + items.filter((it) => it.kind === mode).length, 0);
-    const avoid = recent.slice(-Math.max(0, Math.min(8, size - 2)));
+    // Up to the last 20 cards (half the pool when it is small) are held back.
+    const avoid = recent.slice(-Math.min(20, Math.floor(size / 2)));
     return pickNext(pool, left, score, { kind: mode, avoid });
   }
 

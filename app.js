@@ -474,7 +474,8 @@ function presetMatches(q) {
   const needle = q.toLowerCase();
   return Object.values(state.presets)
     .filter((s) => s.name.toLowerCase().includes(needle))
-    .map((s) => ({ id: s.id, name: s.name, year: s.year }));
+    .map((s) => ({ id: s.id, name: s.name, year: s.year }))
+    .sort((a, b) => a.name.localeCompare(b.name)); // presets are keyed by id, so order them for people
 }
 
 function resultRow(entry) {

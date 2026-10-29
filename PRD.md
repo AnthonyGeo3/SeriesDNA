@@ -47,7 +47,7 @@ It's built for a two-minute live demo to a team (section 13), and also for peopl
 /game.js             the Higher or Lower screen
 /dom.js              tiny h() element builder (text always via textContent, never HTML)
 /core.test.mjs       node --test unit tests for core.js and the preset data
-/data/presets.json   generated, committed (15 shows, ~165 KB)
+/data/presets.json   generated, committed (48 shows, ~342 KB; ~70 KB gzipped)
 /scripts/lib.mjs     shared helpers and the preset list for the two scripts below
 /scripts/audit.mjs   rating-coverage audit
 /scripts/build-presets.mjs
@@ -78,10 +78,20 @@ Show = {
 - Unrated episodes draw as a dark-grey "no rating" band, are left out of all stats, and the card says "No rating".
 
 ### Presets (`data/presets.json`)
-These 15 shows are 97–100% rated, each pinned to its TVmaze id:
+These 48 shows (5,029 episodes) are 97–100% rated, each pinned to its TVmaze id. The original 15:
 - The Boys (15299), Grey's Anatomy (67), Silo (38052), Peaky Blinders (269), Breaking Bad (169)
 - Succession (23470), Game of Thrones (82), The Office US (526), Lost (123), Stranger Things (2993)
 - Better Call Saul (618), The Wire (179), Friends (431), Dexter (161), The Simpsons (83)
+
+Added 33 so Higher or Lower doesn't keep cycling through the same shows (they also widen the offline list in search):
+- The Sopranos (527), Mad Men (385), The Last of Us (46562), House of the Dragon (44778), Ted Lasso (44458)
+- The Crown (3594), Ozark (13417), True Detective (5), Fargo (32), Black Mirror (305), Sherlock (335)
+- The Mandalorian (38963), The Bear (54198), Schitt's Creek (1775), Brooklyn Nine-Nine (49), Parks and Recreation (174)
+- How I Met Your Mother (171), Seinfeld (530), The Walking Dead (73), House (118), Squid Game (43687), Westworld (1371)
+- Dark (17861), Mr. Robot (1871), Rick and Morty (216), Yellowstone (27848), Narcos (2705), The Big Bang Theory (66)
+- Community (318), Prison Break (541), Suits (172), Avatar: The Last Airbender (555), Fleabag (16149)
+
+Arcane was tried but has no TVmaze match by name and year, so it was left out. Severance is deliberately not a preset, so searching it still shows live search working. With an empty query, the search list shows the presets alphabetically.
 
 `scripts/build-presets.mjs` matches each show by name **and** premiere year, prints the top 3 search matches, and fails if the match isn't the pinned id. That stops it grabbing the UK Office or a reboot.
 
@@ -228,9 +238,9 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 - **Modes**, picked at the top, each with its own best score, and the last mode remembered:
   - **Show vs Show:** whole-show averages. Easier, and the default.
   - **Season vs Season:** single seasons, with at least 3 rated episodes each. It picks a random show first, then one of its seasons, so long-runners don't crowd the rest out.
-- **Pool:** the presets, plus any show the user has searched for before (cached), plus whatever is loaded now. The presets alone give 15 shows and 140 seasons.
+- **Pool:** the presets, plus any show the user has searched for before (cached), plus whatever is loaded now. The presets alone give 48 shows and 326 seasons.
 - **Difficulty:** pairs start at least 0.5 apart, and the minimum gap shrinks by 0.04 per point, down to 0.1.
-- **No repeats:** cards seen in the last few rounds (up to 8, fewer for small pools) don't come straight back.
+- **No repeats:** the last 20 cards (half the pool when it's small) are held back. In a 30-round game that means about 29 different shows in Show vs Show and 30 different seasons in Season vs Season, with every round still meeting the difficulty gap.
 - **Ties:** ratings are compared as shown (one decimal place), and a tie counts as correct.
 - **Reveal:** the hidden rating counts from the known one to its value over 650ms. The card then shows that show's or season's barcode. Nothing about the hidden card's rating or barcode is visible before the guess.
 - **Controls:** ↑/↓ or H/L on desktop, and Escape closes. Reduced motion skips the count-up and the card pop.
@@ -294,7 +304,7 @@ Everything is CSS grid and flexbox, using `dvh` (never `vh`), `clamp()` for type
 - **Data quality:**
   - TVmaze ratings cluster between about 7.5 and 9, and smaller shows have few voters, so this is fun, not authoritative.
   - Some runtimes are slot lengths: Grey's is listed at 60 minutes, so Hours mode overstates it (471 hours rather than about 340).
-- **Show vs Show is tight:** most whole-show averages sit between 7.8 and 8.5, so rounds are often 0.1–0.2 apart, and ties (which count as correct) are common. Searching more shows adds variety.
+- **Show vs Show is still fairly tight:** the 48 whole-show averages run from 7.3 (Schitt's Creek) to 8.9 (Friends), but the middle half sit between 7.8 and 8.2. Later rounds are often 0.1–0.2 apart, and ties (which count as correct) happen. Searching more shows adds more.
 - **Offline needs the page already loaded.** There's no service worker, by choice: a stale cache straight after a deploy is a demo risk.
 - **The social preview is static:** every link shows the default matchup image. Static Pages can't make one per link.
 - **No committed browser tests:** the Playwright checks above live outside the repo.
